@@ -48,6 +48,7 @@
     sectionSwitcher: $("sectionSwitcher"),
     sectionInput: $("sectionInput"),
     sectionOptions: $("sectionOptions"),
+    sectionChips: $("sectionChips"),
     switchSectionBtn: $("switchSectionBtn"),
     unreadBadge: $("unreadBadge"),
     draftBadge: $("draftBadge"),
@@ -1323,6 +1324,17 @@
       const sections = Array.from(new Set([state.profile.classCode].concat(state.knownSections).concat(readSections(), overviewCodes))).filter(Boolean);
       els.sectionOptions.innerHTML = sections
         .map((code) => '<option value="' + escapeHtml(code) + '"></option>')
+        .join("");
+      els.sectionChips.innerHTML = sections
+        .slice(0, 8)
+        .map((code) => {
+          const active = code === state.profile.classCode;
+          return (
+            '<button type="button" class="section-chip' + (active ? " active" : "") + '" data-section="' + escapeHtml(code) + '" title="Switch to ' + escapeHtml(code) + '">' +
+              escapeHtml(code) +
+            "</button>"
+          );
+        })
         .join("");
     }
 
@@ -3060,6 +3072,10 @@
     });
 
     els.switchSectionBtn.addEventListener("click", switchSection);
+    els.sectionChips.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-section]");
+      if (button) switchSection(button.getAttribute("data-section"));
+    });
     els.sectionInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
