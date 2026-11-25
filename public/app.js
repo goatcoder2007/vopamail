@@ -1441,11 +1441,18 @@
       .slice(0, 6)
       .map((item) => item.member);
     let html = "";
-    if (state.profile.role === "teacher" && "email all students".startsWith(query)) {
+    const isTeacher = state.profile.role === "teacher";
+    if (isTeacher && "email all students".startsWith(query)) {
       const count = state.members.filter((member) => member.role === "student").length;
       html +=
         '<button type="button" class="suggestion suggestion-all" data-suggest="All students" title="Send one message to every student in this section">' +
           "Email all students (" + count + ")" +
+        "</button>";
+    }
+    if (isTeacher && ("/all".startsWith(query) || query === "all")) {
+      html +=
+        '<button type="button" class="suggestion suggestion-all" data-suggest="/all" title="Send one message to every student in this section">' +
+          "/all" +
         "</button>";
     }
     html += contacts
@@ -2935,8 +2942,9 @@
     const button = event.target.closest("[data-suggest]");
     if (!button) return;
     const name = button.getAttribute("data-suggest");
-    if (normalizeName(name) === "all students") {
-      compose.to = "All students";
+    const key = normalizeName(name);
+    if (key === "all students" || key === "all" || key === "/all") {
+      compose.to = key === "all students" ? "All students" : "/all";
       els.composeTo.value = compose.to;
       setFieldError(els.composeError, "");
       renderSuggestions();
