@@ -1321,7 +1321,7 @@
         els.sectionInput.value = state.profile.classCode;
       }
       const overviewCodes = state.adminOverview ? state.adminOverview.sections.map((section) => section.code) : [];
-      const sections = Array.from(new Set([state.profile.classCode].concat(state.knownSections).concat(readSections(), overviewCodes))).filter(Boolean);
+      const sections = Array.from(new Set([state.profile.classCode].concat(state.knownSections, overviewCodes))).filter(Boolean);
       els.sectionOptions.innerHTML = sections
         .map((code) => '<option value="' + escapeHtml(code) + '"></option>')
         .join("");
