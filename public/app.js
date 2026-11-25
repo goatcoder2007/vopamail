@@ -1399,13 +1399,31 @@
   }
 
   function renderSuggestions() {
-    if (!state.profile) return;
+    if (!state.profile || !compose.open) {
+      els.recipientSuggestions.innerHTML = "";
+      return;
+    }
+    const parts = compose.to.split(",");
+    const query = normalizeName(parts[parts.length - 1]);
+    if (!query) {
+      els.recipientSuggestions.innerHTML = "";
+      return;
+    }
     const contacts = state.members
       .filter((member) => member.uid !== state.profile.uid)
       .filter((member) => state.profile.role === "teacher" || member.role !== "student" || state.settings.studentMessaging !== false)
+      .filter((member) => {
+        const haystack = normalizeName(member.name) + " " + normalizeName(displayEmail(member.name));
+        return haystack.includes(query);
+      })
+      .sort((a, b) => {
+        const aStarts = a.nameLower.indexOf(query) === 0 ? 0 : 1;
+        const bStarts = b.nameLower.indexOf(query) === 0 ? 0 : 1;
+        return aStarts - bStarts || a.nameLower.localeCompare(b.nameLower);
+      })
       .slice(0, 6);
     let html = "";
-    if (state.profile.role === "teacher") {
+    if (state.profile.role === "teacher" && "email all students".includes(query)) {
       const count = state.members.filter((member) => member.role === "student").length;
       html +=
         '<button type="button" class="suggestion suggestion-all" data-suggest="All students" title="Send one message to every student in this section">' +
@@ -1415,12 +1433,13 @@
     html += contacts
       .map((member) => {
         return (
-          '<button type="button" class="suggestion" data-suggest="' + escapeHtml(member.name) + '" title="' + escapeHtml(displayEmail(member.name)) + '">' +
+          '<button type="button" class="suggestion" data-suggest="' + escapeHtml(member.name) + '" title="' + escapeHtml(displayEmail(member.name) + " · " + member.role) + '">' +
             escapeHtml(member.name) +
           "</button>"
         );
       })
       .join("");
+    if (!html) html = '<span class="suggestion suggestion-empty">No matching person</span>';
     els.recipientSuggestions.innerHTML = html;
   }
 
@@ -2902,6 +2921,7 @@
       compose.to = "All students";
       els.composeTo.value = compose.to;
       setFieldError(els.composeError, "");
+      renderSuggestions();
       els.composeBody.focus();
       return;
     }
@@ -2912,6 +2932,7 @@
     compose.to = current.join(", ");
     els.composeTo.value = compose.to;
     setFieldError(els.composeError, "");
+    renderSuggestions();
     els.composeBody.focus();
   }
 
@@ -3026,7 +3047,16 @@
         compose.body = els.composeBody.value;
         setFieldError(els.composeError, "");
         renderComposeModeration();
+        if (input === els.composeTo) renderSuggestions();
       });
+    });
+
+    els.composeTo.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      const first = els.recipientSuggestions.querySelector("button[data-suggest]");
+      if (!first) return;
+      event.preventDefault();
+      handleSuggestionClick({ target: first });
     });
 
     els.switchSectionBtn.addEventListener("click", switchSection);

@@ -2003,11 +2003,18 @@ body.demo-banner-visible .app-shell {
   font-size: 0.6875rem;
   font-weight: 600;
   box-shadow: var(--shadow-sm);
+  cursor: pointer;
 }
 
-.suggestion:hover {
+button.suggestion:hover {
   border-color: var(--brand);
   color: var(--brand-dark);
+}
+
+.suggestion-empty {
+  color: var(--ink-3);
+  cursor: default;
+  box-shadow: none;
 }
 
 .suggestion-all {
