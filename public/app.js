@@ -1413,10 +1413,11 @@
   function recipientMatchRank(member, query) {
     const name = normalizeName(member.name);
     const email = normalizeName(displayEmail(member.name));
+    const local = email.split("@")[0];
     if (name.startsWith(query)) return 0;
     if (name.split(" ").some((part) => part.startsWith(query))) return 1;
-    if (email.startsWith(query)) return 2;
-    if (email.split(/[@.]/).some((part) => part && part.startsWith(query))) return 3;
+    if (local.startsWith(query)) return 2;
+    if (email.startsWith(query)) return 3;
     return -1;
   }
 
