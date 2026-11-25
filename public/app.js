@@ -1410,6 +1410,16 @@
       .join("");
   }
 
+  function recipientMatchRank(member, query) {
+    const name = normalizeName(member.name);
+    const email = normalizeName(displayEmail(member.name));
+    if (name.startsWith(query)) return 0;
+    if (name.split(" ").some((part) => part.startsWith(query))) return 1;
+    if (email.startsWith(query)) return 2;
+    if (email.split(/[@.]/).some((part) => part && part.startsWith(query))) return 3;
+    return -1;
+  }
+
   function renderSuggestions() {
     if (!state.profile || !compose.open) {
       els.recipientSuggestions.innerHTML = "";
@@ -1424,18 +1434,13 @@
     const contacts = state.members
       .filter((member) => member.uid !== state.profile.uid)
       .filter((member) => state.profile.role === "teacher" || member.role !== "student" || state.settings.studentMessaging !== false)
-      .filter((member) => {
-        const haystack = normalizeName(member.name) + " " + normalizeName(displayEmail(member.name));
-        return haystack.includes(query);
-      })
-      .sort((a, b) => {
-        const aStarts = a.nameLower.indexOf(query) === 0 ? 0 : 1;
-        const bStarts = b.nameLower.indexOf(query) === 0 ? 0 : 1;
-        return aStarts - bStarts || a.nameLower.localeCompare(b.nameLower);
-      })
-      .slice(0, 6);
+      .map((member) => ({ member, rank: recipientMatchRank(member, query) }))
+      .filter((item) => item.rank >= 0)
+      .sort((a, b) => a.rank - b.rank || a.member.nameLower.localeCompare(b.member.nameLower))
+      .slice(0, 6)
+      .map((item) => item.member);
     let html = "";
-    if (state.profile.role === "teacher" && "email all students".includes(query)) {
+    if (state.profile.role === "teacher" && "email all students".startsWith(query)) {
       const count = state.members.filter((member) => member.role === "student").length;
       html +=
         '<button type="button" class="suggestion suggestion-all" data-suggest="All students" title="Send one message to every student in this section">' +
