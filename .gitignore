@@ -1,0 +1,15 @@
+# Local Netlify folder
+.netlify
+
+# Local Playwright artifacts
+.playwright-cli
+
+# Local Supabase temporary files
+supabase/.temp
+
+# Private school records
+Second Form IT202 Login Info.txt
+student Class 2026-2027.docx
+
+# Local scratch image
+image.png

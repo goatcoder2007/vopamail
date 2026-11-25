@@ -1,0 +1,39 @@
+<main class="mail-main">
+  <header class="mail-topbar">
+    <button id="menuBtn" class="icon-btn menu-btn" type="button" aria-label="Open menu">
+      <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
+    </button>
+    <div class="search-wrap">
+      <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+      <label class="sr-only" for="searchInput">Search mail</label>
+      <input id="searchInput" type="search" placeholder="Search mail" autocomplete="off">
+      <button id="clearSearch" class="clear-search" type="button" aria-label="Clear search" hidden>
+        <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
+      </button>
+    </div>
+    <button id="refreshBtn" class="icon-btn refresh-btn" type="button" title="Refresh" aria-label="Refresh">
+      <svg class="icon" aria-hidden="true"><use href="#i-refresh"></use></svg>
+    </button>
+    <div id="topbarUser" class="topbar-user"></div>
+  </header>
+
+  <div class="mail-content">
+    <section id="listPane" class="list-pane" aria-label="Message list">
+      <div class="list-head">
+        <div>
+          <h2 id="folderTitle">Inbox</h2>
+          <p id="folderCount"></p>
+        </div>
+        <div id="filterChips" class="filter-chips" role="group" aria-label="Filter messages">
+          <button type="button" data-filter="all" class="chip active">All</button>
+          <button type="button" data-filter="unread" class="chip">Unread</button>
+        </div>
+      </div>
+      <div id="messageList" class="message-list" role="list"></div>
+    </section>
+
+    <section id="detailPane" class="detail-pane" aria-label="Message detail">
+      <div id="detailContent"></div>
+    </section>
+  </div>
+</main>

@@ -1,0 +1,25 @@
+<div id="alertOverlay" class="alert-overlay" hidden>
+  <div class="alert-card" role="alertdialog" aria-modal="true" aria-labelledby="alertTitle" aria-describedby="alertMessage">
+    <span id="alertIcon" class="alert-icon">
+      <svg class="icon" aria-hidden="true"><use id="alertIconUse" href="#i-check"></use></svg>
+    </span>
+    <div class="alert-copy">
+      <h2 id="alertTitle">Done</h2>
+      <p id="alertMessage"></p>
+    </div>
+    <button id="alertOk" class="btn primary" type="button">OK</button>
+  </div>
+</div>
+<div id="fileLightbox" class="file-lightbox" hidden aria-label="File preview" role="dialog" aria-modal="true">
+  <button id="lightboxClose" class="lightbox-close" type="button" aria-label="Close preview">
+    <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
+  </button>
+  <figure class="lightbox-figure">
+    <img id="lightboxImage" class="lightbox-image" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+    <figcaption class="lightbox-caption">
+      <strong id="lightboxName"></strong>
+      <span id="lightboxMeta"></span>
+      <a id="lightboxDownload" class="btn ghost" href="#" download>Download</a>
+    </figcaption>
+  </figure>
+</div>
