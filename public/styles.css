@@ -3423,6 +3423,39 @@ button.suggestion:hover {
   color: var(--ink-2);
 }
 
+.viewed-by {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 0.75rem;
+}
+
+.viewed-by strong {
+  color: var(--brand-dark);
+}
+
+.viewed-by .icon {
+  width: 16px;
+  height: 16px;
+  color: var(--brand);
+}
+
+.viewed-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.viewed-empty {
+  font-style: italic;
+}
+
 @media (max-width: 720px) {
   .roster-fields,
   .grade-form .roster-fields {

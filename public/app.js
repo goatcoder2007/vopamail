@@ -118,6 +118,7 @@
     submissions: [],
     submissionFiles: [],
     announcements: [],
+    itemViews: [],
     selectedAssignmentId: null,
     selectedAnnouncementId: null,
     workFormOpen: false,
@@ -540,6 +541,13 @@
     localStorage.setItem(demoKey(classCode, "seeded"), "1");
   }
 
+  function deleteDemoItemViews(classCode, itemType, itemId) {
+    const views = readJson(demoKey(classCode, "itemViews"), []).filter(
+      (view) => !(view.itemType === itemType && view.itemId === itemId)
+    );
+    writeJson(demoKey(classCode, "itemViews"), views);
+  }
+
   function createDemoBackend() {
     return {
       async signIn(input) {
@@ -670,6 +678,7 @@
         writeJson(demoKey(classCode, "assignments"), rows);
         const submissions = readJson(demoKey(classCode, "submissions"), []).filter((row) => row.assignmentId !== assignmentId);
         writeJson(demoKey(classCode, "submissions"), submissions);
+        deleteDemoItemViews(classCode, "assignment", assignmentId);
       },
       async getSubmissions(classCode) {
         return readJson(demoKey(classCode, "submissions"), []);
@@ -733,6 +742,25 @@
       async deleteAnnouncement(classCode, announcementId) {
         const rows = readJson(demoKey(classCode, "announcements"), []).filter((row) => row.id !== announcementId);
         writeJson(demoKey(classCode, "announcements"), rows);
+        deleteDemoItemViews(classCode, "announcement", announcementId);
+      },
+      async getItemViews(classCode) {
+        return readJson(demoKey(classCode, "itemViews"), []);
+      },
+      async markItemViewed(classCode, view) {
+        const rows = readJson(demoKey(classCode, "itemViews"), []);
+        const existing = rows.find(
+          (row) => row.itemType === view.itemType && row.itemId === view.itemId && row.viewerId === view.viewerId
+        );
+        if (existing) {
+          existing.viewedAt = view.viewedAt;
+          writeJson(demoKey(classCode, "itemViews"), rows);
+          return existing;
+        }
+        const row = Object.assign({}, view, { id: makeId("view") });
+        rows.unshift(row);
+        writeJson(demoKey(classCode, "itemViews"), rows);
+        return row;
       },
       async createMessage(classCode, message) {
         const messages = readJson(demoKey(classCode, "messages"), []);
@@ -793,6 +821,7 @@
           demoKey(classCode, "messages"),
           messages.filter((item) => item.id !== id)
         );
+        deleteDemoItemViews(classCode, "message", id);
       },
       async saveDraft(classCode, uid, draft) {
         const drafts = readJson(demoKey(classCode, "drafts." + uid), []);
@@ -904,6 +933,16 @@
       title: row.title || "",
       body: row.body || "",
       createdAt: toMs(row.created_at)
+    };
+  }
+
+  function mapItemView(row) {
+    return {
+      itemType: row.item_type,
+      itemId: row.item_id,
+      classCode: row.class_code,
+      viewerId: row.viewer_id,
+      viewedAt: toMs(row.viewed_at)
     };
   }
 
@@ -1324,6 +1363,24 @@
           .eq("class_code", classCode)
           .eq("id", announcementId);
         if (result.error) throw result.error;
+      },
+      async getItemViews(classCode) {
+        const result = await client
+          .from("item_views")
+          .select("*")
+          .eq("class_code", classCode)
+          .order("viewed_at", { ascending: false });
+        if (result.error) throw result.error;
+        return (result.data || []).map(mapItemView);
+      },
+      async markItemViewed(classCode, view) {
+        const result = await client.rpc("mark_item_viewed", {
+          p_item_type: view.itemType,
+          p_item_id: view.itemId,
+          p_class_code: classCode
+        });
+        if (result.error) throw result.error;
+        return view;
       },
       async createMessage(classCode, message) {
         const result = await client
@@ -2259,6 +2316,7 @@
           '<p class="work-meta">' + escapeHtml(dueLabel(assignment)) + " · " + escapeHtml(formatFullDate(assignment.createdAt)) + "</p>" +
           '<div class="message-body">' + linkify(assignment.instructions || "No extra instructions.") + "</div>" +
         "</div>" +
+        viewedByHtml("assignment", assignment.id, assignment.teacherId) +
         body +
       "</div>";
   }
@@ -2304,6 +2362,7 @@
           '<div class="announcement-meta">' + escapeHtml(formatFullDate(announcement.createdAt)) + "</div>" +
           "<h1>" + escapeHtml(announcement.title) + "</h1>" +
           '<div class="message-body">' + linkify(announcement.body || "No message text.") + "</div>" +
+          viewedByHtml("announcement", announcement.id, announcement.authorId) +
         "</article>" +
       "</div>";
   }
@@ -2711,6 +2770,7 @@
           '<span class="meta-copy"><strong>' + escapeHtml(from) + "</strong><span>" + escapeHtml(displayEmail(from)) + "</span><span>To " + escapeHtml(to) + "</span></span>" +
           '<span class="meta-date">' + escapeHtml(formatFullDate(item.createdAt)) + "</span>" +
         "</div>" +
+        viewedByHtml("message", item.id, item.fromUid) +
         '<div class="message-body">' + linkify(item.body) + "</div>" +
         '<div id="messageFiles" class="message-files"></div>' +
         '<div class="reply-box"><button type="button" class="btn primary" data-action="reply" data-id="' + escapeHtml(item.id) + '"><svg class="icon" aria-hidden="true"><use href="#i-reply"></use></svg>Reply</button></div>' +
@@ -2750,6 +2810,56 @@
     return state.drafts.find((item) => item.id === id) || null;
   }
 
+  function viewedByHtml(itemType, itemId, authorId) {
+    const canView = state.profile.role === "teacher" || (itemType === "message" && authorId === state.profile.uid);
+    if (!canView) return "";
+    const views = state.itemViews.filter((view) => view.itemType === itemType && view.itemId === itemId);
+    const names = views.map((view) => {
+      const member = state.members.find((entry) => entry.uid === view.viewerId);
+      return member ? member.name : "Someone";
+    });
+    return (
+      '<div class="viewed-by">' +
+        '<svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>' +
+        "<strong>Viewed by</strong>" +
+        (names.length
+          ? '<span class="viewed-names">' +
+            names
+              .map((name) => '<span class="admin-pill muted">' + escapeHtml(name) + "</span>")
+              .join("") +
+            "</span>"
+          : '<span class="viewed-empty">Not viewed yet</span>') +
+      "</div>"
+    );
+  }
+
+  async function markViewed(itemType, itemId) {
+    if (!state.profile || !itemId || !backend.markItemViewed) return;
+    if (
+      state.itemViews.some(
+        (view) => view.itemType === itemType && view.itemId === itemId && view.viewerId === state.profile.uid
+      )
+    ) {
+      return;
+    }
+    const view = {
+      itemType,
+      itemId,
+      classCode: state.profile.classCode,
+      viewerId: state.profile.uid,
+      viewedAt: Date.now()
+    };
+    state.itemViews.push(view);
+    renderDetail();
+    try {
+      await backend.markItemViewed(state.profile.classCode, view);
+    } catch (error) {
+      state.itemViews = state.itemViews.filter((entry) => entry !== view);
+      renderDetail();
+      showToast("Could not record view: " + friendlyError(error), "error");
+    }
+  }
+
   function markRead(id) {
     const message = findMessage(id);
     const me = state.profile.uid;
@@ -2765,7 +2875,10 @@
   function selectItem(item) {
     state.openId = item.id;
     state.openKind = item.kind;
-    if (item.kind === "message") markRead(item.id);
+    if (item.kind === "message") {
+      markRead(item.id);
+      markViewed("message", item.id);
+    }
     els.appShell.setAttribute("data-view", "detail");
     renderList();
     renderDetail();
@@ -2789,7 +2902,7 @@
     renderList();
     try {
       const code = state.profile.classCode;
-      const [members, messages, drafts, settings, assignments, submissions, submissionFiles, announcements] = await Promise.all([
+      const [members, messages, drafts, settings, assignments, submissions, submissionFiles, announcements, itemViews] = await Promise.all([
         backend.getMembers(code),
         backend.getMessages(code),
         backend.getDrafts(code, state.profile.uid),
@@ -2797,7 +2910,8 @@
         backend.getAssignments(code).catch(() => []),
         backend.getSubmissions(code).catch(() => []),
         backend.getSubmissionFiles(code).catch(() => []),
-        backend.getAnnouncements(code).catch(() => [])
+        backend.getAnnouncements(code).catch(() => []),
+        backend.getItemViews(code).catch(() => [])
       ]);
       state.members = members;
       state.messages = messages;
@@ -2806,9 +2920,12 @@
       state.submissions = submissions;
       state.submissionFiles = submissionFiles;
       state.announcements = announcements;
+      state.itemViews = itemViews;
       state.settings = settings || { studentMessaging: true };
       ensureSelection();
       renderAll();
+      if (state.folder === "assignments" && state.selectedAssignmentId) markViewed("assignment", state.selectedAssignmentId);
+      if (state.folder === "announcements" && state.selectedAnnouncementId) markViewed("announcement", state.selectedAnnouncementId);
       if (state.pendingOpenMessageId) {
         const pendingId = state.pendingOpenMessageId;
         state.pendingOpenMessageId = null;
@@ -2884,6 +3001,7 @@
     state.submissionDraftFor = null;
     state.submissionDraftBody = "";
     state.submissionDraftFiles = [];
+    state.itemViews = [];
     els.searchInput.value = "";
     els.clearSearch.hidden = true;
     els.appShell.setAttribute("data-view", "list");
@@ -2927,6 +3045,7 @@
       state.submissionDraftFor = null;
       state.submissionDraftBody = "";
       state.submissionDraftFiles = [];
+      state.itemViews = [];
       els.appShell.setAttribute("data-view", "list");
       renderSidebar();
       refresh();
@@ -3381,6 +3500,7 @@
     state.submissions = [];
     state.submissionFiles = [];
     state.announcements = [];
+    state.itemViews = [];
     state.selectedAssignmentId = null;
     state.selectedAnnouncementId = null;
     state.workFormOpen = false;
@@ -3472,6 +3592,7 @@
       renderAssignmentsList();
       renderAssignmentDetail();
       els.appShell.setAttribute("data-view", "detail");
+      markViewed("assignment", id);
       return;
     }
     if (action === "select-announcement") {
@@ -3480,6 +3601,7 @@
       renderAnnouncementsList();
       renderAnnouncementDetail();
       els.appShell.setAttribute("data-view", "detail");
+      markViewed("announcement", id);
       return;
     }
     if (action === "star") {
