@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import type {
   AdminOverview,
   Announcement,
@@ -722,10 +723,10 @@ function mapItemView(row: any): ItemView {
 }
 
 function createSupabaseBackend(): BackendService {
-  if (!window.supabase || !window.supabase.createClient || !CONFIG.url || !publicKey) {
-    throw new Error("Supabase library did not load.");
+  if (!hasKeys) {
+    throw new Error("Supabase configuration is missing.");
   }
-  const client = window.supabase.createClient(CONFIG.url, publicKey, {
+  const client = createClient(CONFIG.url!, publicKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
   });
   let tempClient: any = null;
@@ -744,7 +745,7 @@ function createSupabaseBackend(): BackendService {
 
   function getTempClient() {
     if (!tempClient) {
-      tempClient = window.supabase!.createClient!(CONFIG.url!, publicKey, {
+      tempClient = createClient(CONFIG.url!, publicKey, {
         auth: {
           persistSession: false,
           autoRefreshToken: false,
@@ -847,6 +848,7 @@ function createSupabaseBackend(): BackendService {
           if (!signup.data || !signup.data.session) {
             throw new Error("Email confirmation is on in Supabase. Turn it off in Auth settings, then try again.");
           }
+          if (!signup.data.user) throw new Error("The teacher account could not be created.");
           const teacher: Profile = {
             uid: signup.data.user.id,
             classCode: input.classCode,

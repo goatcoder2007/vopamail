@@ -24,7 +24,7 @@ npm test          # Vitest unit tests
 npm run test:e2e  # Playwright browser smoke tests
 ```
 
-The Playwright suite uses the installed Chrome channel. Install it first with `npx playwright install chrome` if it is not already available.
+The Playwright suite runs against the production preview and uses the installed Chrome channel. Run `npm run build` first, and install Chrome with `npx playwright install chrome` if it is not already available.
 
 Navigation is URL-driven: folders, open messages, assignments, announcements, students, and the teacher dashboard section all have shareable links. Deployments need an SPA fallback to `index.html`, which is configured for Vercel and Netlify.
 
@@ -32,7 +32,7 @@ The Vite build output is written to `dist/`.
 
 ## Configuration
 
-Supabase settings live in `public/supabase-config.js` and are loaded before the app starts. Leave placeholder values in place to use local demo mode, or append `?demo=1` to the URL. Demo data is stored in `localStorage` on the current device.
+Supabase settings live in `public/supabase-config.js` and are loaded before the app starts. The Supabase client library is bundled with the app, so no CDN script tag is required. Leave placeholder values in place to use local demo mode, or append `?demo=1` to the URL. Demo data is stored in `localStorage` on the current device.
 
 ## Supabase setup
 

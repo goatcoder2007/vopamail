@@ -2,7 +2,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!assets/|[^/]+\\.(?:js|css|png|svg|ico|json)$).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

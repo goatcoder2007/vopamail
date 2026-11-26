@@ -138,8 +138,8 @@ export function friendlyError(error: unknown) {
   if (/failed to fetch|network|load failed/i.test(message)) {
     return "Could not reach the mail server. Check your connection and try again.";
   }
-  if (/supabase library/i.test(message)) {
-    return "The Supabase library could not load. Check your connection and reload.";
+  if (/supabase (library|configuration)/i.test(message)) {
+    return "Supabase is not configured. Add your keys in supabase-config.js or use demo mode.";
   }
   return message;
 }
