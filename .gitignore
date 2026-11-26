@@ -4,6 +4,9 @@
 # Local Playwright artifacts
 .playwright-cli
 
+# Local design review artifacts
+.impeccable
+
 # Local Supabase temporary files
 supabase/.temp
 

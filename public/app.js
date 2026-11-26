@@ -23,7 +23,9 @@
     dashboard: "All sections",
     roster: "Class roster",
     all: "All class mail",
-    flags: "Flagged messages"
+    flags: "Flagged messages",
+    assignments: "Assignments",
+    announcements: "Announcements"
   };
 
   const $ = (id) => document.getElementById(id);
@@ -112,6 +114,16 @@
     drafts: [],
     messageFiles: [],
     fileUrls: {},
+    assignments: [],
+    submissions: [],
+    submissionFiles: [],
+    announcements: [],
+    selectedAssignmentId: null,
+    selectedAnnouncementId: null,
+    workFormOpen: false,
+    submissionDraftFor: null,
+    submissionDraftBody: "",
+    submissionDraftFiles: [],
     settings: { studentMessaging: true },
     folder: "inbox",
     filter: "all",
@@ -643,6 +655,85 @@
       async getDrafts(classCode, uid) {
         return readJson(demoKey(classCode, "drafts." + uid), []);
       },
+      async getAssignments(classCode) {
+        return readJson(demoKey(classCode, "assignments"), []);
+      },
+      async createAssignment(classCode, assignment) {
+        const rows = readJson(demoKey(classCode, "assignments"), []);
+        const row = Object.assign({}, assignment, { id: makeId("assign"), createdAt: Date.now() });
+        rows.unshift(row);
+        writeJson(demoKey(classCode, "assignments"), rows);
+        return row;
+      },
+      async deleteAssignment(classCode, assignmentId) {
+        const rows = readJson(demoKey(classCode, "assignments"), []).filter((row) => row.id !== assignmentId);
+        writeJson(demoKey(classCode, "assignments"), rows);
+        const submissions = readJson(demoKey(classCode, "submissions"), []).filter((row) => row.assignmentId !== assignmentId);
+        writeJson(demoKey(classCode, "submissions"), submissions);
+      },
+      async getSubmissions(classCode) {
+        return readJson(demoKey(classCode, "submissions"), []);
+      },
+      async saveSubmission(classCode, submission) {
+        const rows = readJson(demoKey(classCode, "submissions"), []);
+        const existing = rows.find((row) => row.assignmentId === submission.assignmentId && row.studentId === submission.studentId);
+        const row = Object.assign({}, existing || {}, submission, {
+          id: existing ? existing.id : makeId("sub"),
+          submittedAt: Date.now(),
+          gradedAt: existing ? existing.gradedAt : null,
+          grade: existing ? existing.grade : "",
+          feedback: existing ? existing.feedback : "",
+          createdAt: existing ? existing.createdAt : Date.now()
+        });
+        if (existing) Object.assign(existing, row);
+        else rows.unshift(row);
+        writeJson(demoKey(classCode, "submissions"), rows);
+        const files = readJson(demoKey(classCode, "submissionFiles"), {});
+        files[row.id] = submission.files.map((file) => Object.assign({ id: makeId("sfile"), submissionId: row.id }, file, { createdAt: Date.now() }));
+        writeJson(demoKey(classCode, "submissionFiles"), files);
+        return row;
+      },
+      async gradeSubmission(classCode, submissionId, grade, feedback) {
+        const rows = readJson(demoKey(classCode, "submissions"), []);
+        const row = rows.find((item) => item.id === submissionId);
+        if (!row) return null;
+        row.grade = grade;
+        row.feedback = feedback;
+        row.gradedAt = Date.now();
+        writeJson(demoKey(classCode, "submissions"), rows);
+        return row;
+      },
+      async getSubmissionFiles(classCode) {
+        const all = readJson(demoKey(classCode, "submissionFiles"), {});
+        return Object.keys(all).reduce((result, key) => result.concat(all[key] || []), []);
+      },
+      async uploadSubmissionFile(classCode, uid, file) {
+        return {
+          name: file.name,
+          path: classCode + "/submissions/" + uid + "/demo-" + makeId("file") + "-" + String(file.name).replace(/[^A-Za-z0-9._-]/g, "_"),
+          size: file.size,
+          type: file.type || "application/octet-stream"
+        };
+      },
+      async deleteSubmissionFiles(classCode, submissionId) {
+        const all = readJson(demoKey(classCode, "submissionFiles"), {});
+        delete all[submissionId];
+        writeJson(demoKey(classCode, "submissionFiles"), all);
+      },
+      async getAnnouncements(classCode) {
+        return readJson(demoKey(classCode, "announcements"), []);
+      },
+      async createAnnouncement(classCode, announcement) {
+        const rows = readJson(demoKey(classCode, "announcements"), []);
+        const row = Object.assign({}, announcement, { id: makeId("ann"), createdAt: Date.now() });
+        rows.unshift(row);
+        writeJson(demoKey(classCode, "announcements"), rows);
+        return row;
+      },
+      async deleteAnnouncement(classCode, announcementId) {
+        const rows = readJson(demoKey(classCode, "announcements"), []).filter((row) => row.id !== announcementId);
+        writeJson(demoKey(classCode, "announcements"), rows);
+      },
       async createMessage(classCode, message) {
         const messages = readJson(demoKey(classCode, "messages"), []);
         const row = Object.assign({}, message, { id: makeId("msg"), createdAt: Date.now() });
@@ -761,6 +852,58 @@
       subject: row.subject || "",
       body: row.body || "",
       attachments: row.attachments || []
+    };
+  }
+
+  function mapAssignment(row) {
+    return {
+      id: row.id,
+      classCode: row.class_code,
+      teacherId: row.teacher_id,
+      title: row.title || "",
+      instructions: row.instructions || "",
+      dueAt: row.due_at ? toMs(row.due_at) : null,
+      createdAt: toMs(row.created_at)
+    };
+  }
+
+  function mapSubmission(row) {
+    return {
+      id: row.id,
+      assignmentId: row.assignment_id,
+      classCode: row.class_code,
+      studentId: row.student_id,
+      body: row.body || "",
+      grade: row.grade || "",
+      feedback: row.feedback || "",
+      gradedAt: row.graded_at ? toMs(row.graded_at) : null,
+      submittedAt: toMs(row.submitted_at || row.created_at),
+      createdAt: toMs(row.created_at)
+    };
+  }
+
+  function mapSubmissionFile(row) {
+    return {
+      id: row.id,
+      submissionId: row.submission_id,
+      classCode: row.class_code,
+      studentId: row.student_id,
+      name: row.file_name || "file",
+      path: row.storage_path,
+      size: Number(row.size_bytes) || 0,
+      type: row.mime_type || "application/octet-stream",
+      createdAt: toMs(row.created_at)
+    };
+  }
+
+  function mapAnnouncement(row) {
+    return {
+      id: row.id,
+      classCode: row.class_code,
+      authorId: row.author_id,
+      title: row.title || "",
+      body: row.body || "",
+      createdAt: toMs(row.created_at)
     };
   }
 
@@ -1032,6 +1175,155 @@
           .order("updated_at", { ascending: false });
         if (result.error) throw result.error;
         return (result.data || []).map(mapDraft);
+      },
+      async getAssignments(classCode) {
+        const result = await client
+          .from("assignments")
+          .select("*")
+          .eq("class_code", classCode)
+          .order("created_at", { ascending: false });
+        if (result.error) throw result.error;
+        return (result.data || []).map(mapAssignment);
+      },
+      async createAssignment(classCode, assignment) {
+        const result = await client
+          .from("assignments")
+          .insert({
+            class_code: classCode,
+            teacher_id: state.profile.uid,
+            title: assignment.title,
+            instructions: assignment.instructions,
+            due_at: assignment.dueAt ? new Date(assignment.dueAt).toISOString() : null
+          })
+          .select()
+          .single();
+        if (result.error) throw result.error;
+        return mapAssignment(result.data);
+      },
+      async deleteAssignment(classCode, assignmentId) {
+        const result = await client
+          .from("assignments")
+          .delete()
+          .eq("class_code", classCode)
+          .eq("id", assignmentId);
+        if (result.error) throw result.error;
+      },
+      async getSubmissions(classCode) {
+        const result = await client
+          .from("assignment_submissions")
+          .select("*")
+          .eq("class_code", classCode)
+          .order("submitted_at", { ascending: false });
+        if (result.error) throw result.error;
+        return (result.data || []).map(mapSubmission);
+      },
+      async saveSubmission(classCode, submission) {
+        const result = await client
+          .from("assignment_submissions")
+          .upsert(
+            {
+              class_code: classCode,
+              assignment_id: submission.assignmentId,
+              student_id: submission.studentId,
+              body: submission.body,
+              submitted_at: new Date().toISOString()
+            },
+            { onConflict: "assignment_id,student_id" }
+          )
+          .select()
+          .single();
+        if (result.error) throw result.error;
+        const saved = mapSubmission(result.data);
+        await this.deleteSubmissionFiles(classCode, saved.id);
+        if (submission.files.length) {
+          const rows = submission.files.map((file) => ({
+            submission_id: saved.id,
+            class_code: classCode,
+            student_id: submission.studentId,
+            file_name: file.name,
+            storage_path: file.path,
+            size_bytes: file.size,
+            mime_type: file.type
+          }));
+          const filesResult = await client.from("submission_files").insert(rows);
+          if (filesResult.error) throw filesResult.error;
+        }
+        return saved;
+      },
+      async gradeSubmission(_classCode, submissionId, grade, feedback) {
+        const result = await client.rpc("grade_submission", {
+          p_submission_id: submissionId,
+          p_grade: grade || null,
+          p_feedback: feedback || ""
+        });
+        if (result.error) throw result.error;
+        const row = await client
+          .from("assignment_submissions")
+          .select("*")
+          .eq("id", submissionId)
+          .single();
+        if (row.error) throw row.error;
+        return mapSubmission(row.data);
+      },
+      async getSubmissionFiles(classCode) {
+        const result = await client
+          .from("submission_files")
+          .select("*")
+          .eq("class_code", classCode)
+          .order("created_at", { ascending: false });
+        if (result.error) throw result.error;
+        return (result.data || []).map(mapSubmissionFile);
+      },
+      async uploadSubmissionFile(classCode, uid, file) {
+        const safeName = String(file.name || "file").replace(/[^A-Za-z0-9._-]/g, "_").slice(-80);
+        const path = classCode + "/submissions/" + uid + "/" + crypto.randomUUID() + "-" + safeName;
+        const { error } = await client.storage
+          .from("class-files")
+          .upload(path, file, {
+            contentType: file.type || "application/octet-stream",
+            upsert: false
+          });
+        if (error) throw error;
+        return { name: file.name, path, size: file.size, type: file.type || "application/octet-stream" };
+      },
+      async deleteSubmissionFiles(classCode, submissionId) {
+        const result = await client
+          .from("submission_files")
+          .delete()
+          .eq("class_code", classCode)
+          .eq("submission_id", submissionId);
+        if (result.error) throw result.error;
+      },
+      async getAnnouncements(classCode) {
+        const result = await client
+          .from("announcements")
+          .select("*")
+          .eq("class_code", classCode)
+          .order("created_at", { ascending: false });
+        if (result.error) throw result.error;
+        return (result.data || []).map(mapAnnouncement);
+      },
+      async createAnnouncement(classCode, announcement) {
+        const result = await client
+          .from("announcements")
+          .insert({
+            class_code: classCode,
+            author_id: state.profile.uid,
+            title: announcement.title,
+            body: announcement.body
+          })
+          .select()
+          .single();
+        if (result.error) throw result.error;
+        return mapAnnouncement(result.data);
+      },
+      async deleteAnnouncement(classCode, announcementId) {
+        const result = await client
+          .from("announcements")
+          .delete()
+          .eq("class_code", classCode)
+          .eq("id", announcementId);
+        if (result.error) throw result.error;
       },
       async createMessage(classCode, message) {
         const result = await client
@@ -1714,6 +2006,308 @@
       "</div>";
   }
 
+  function assignmentsForList() {
+    return state.assignments
+      .filter((item) => !state.query || (item.title + " " + item.instructions).toLowerCase().indexOf(state.query.toLowerCase()) >= 0)
+      .sort((a, b) => {
+        if (a.dueAt && b.dueAt) return a.dueAt - b.dueAt;
+        if (a.dueAt) return -1;
+        if (b.dueAt) return 1;
+        return b.createdAt - a.createdAt;
+      });
+  }
+
+  function submissionsFor(assignmentId) {
+    return state.submissions.filter((item) => item.assignmentId === assignmentId);
+  }
+
+  function mySubmission(assignmentId) {
+    return submissionsFor(assignmentId).find((item) => item.studentId === state.profile.uid) || null;
+  }
+
+  function filesForSubmission(submissionId) {
+    return state.submissionFiles.filter((item) => item.submissionId === submissionId);
+  }
+
+  function assignmentStatus(assignment) {
+    const submissions = submissionsFor(assignment.id);
+    if (state.profile.role === "teacher") {
+      const graded = submissions.filter((item) => item.gradedAt != null).length;
+      if (!submissions.length) return { label: "No submissions", tone: "muted" };
+      return {
+        label: graded + "/" + submissions.length + " graded",
+        tone: graded === submissions.length ? "good" : "progress"
+      };
+    }
+    const mine = mySubmission(assignment.id);
+    if (mine && mine.gradedAt != null) return { label: "Graded", tone: "good" };
+    if (mine) return { label: "Submitted", tone: "progress" };
+    if (assignment.dueAt && assignment.dueAt < Date.now()) return { label: "Due", tone: "warn" };
+    return { label: "Assigned", tone: "muted" };
+  }
+
+  function dueLabel(assignment) {
+    return assignment.dueAt ? "Due " + formatFullDate(assignment.dueAt) : "No due date";
+  }
+
+  function renderAssignmentsList() {
+    const items = assignmentsForList();
+    if (!state.workFormOpen && !items.some((item) => item.id === state.selectedAssignmentId)) {
+      state.selectedAssignmentId = items.length ? items[0].id : null;
+    }
+    els.folderTitle.textContent = "Assignments";
+    els.folderCount.textContent = items.length + " assignment" + (items.length === 1 ? "" : "s");
+    els.filterChips.hidden = true;
+    if (!items.length) {
+      els.messageList.innerHTML =
+        '<div class="empty-state">' +
+          '<span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg></span>' +
+          "<strong>" + (state.query ? "No assignments found" : "No assignments yet") + "</strong>" +
+          "<p>" + (state.profile.role === "teacher" ? "Create the first assignment for this section." : "Your teacher has not posted an assignment yet.") + "</p>" +
+        "</div>";
+      return;
+    }
+    els.messageList.innerHTML = items
+      .map((assignment) => {
+        const status = assignmentStatus(assignment);
+        const active = !state.workFormOpen && assignment.id === state.selectedAssignmentId;
+        return (
+          '<button type="button" class="work-row' + (active ? " active" : "") + '" data-action="select-assignment" data-id="' + escapeHtml(assignment.id) + '">' +
+            '<span class="work-mark"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg></span>' +
+            '<span class="work-copy"><strong>' + escapeHtml(assignment.title) + "</strong><small>" + escapeHtml(dueLabel(assignment)) + "</small></span>" +
+            '<span class="admin-pill ' + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + "</span>" +
+          "</button>"
+        );
+      })
+      .join("");
+  }
+
+  function renderAnnouncementsList() {
+    const items = state.announcements
+      .filter((item) => !state.query || (item.title + " " + item.body).toLowerCase().indexOf(state.query.toLowerCase()) >= 0)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    if (!state.workFormOpen && !items.some((item) => item.id === state.selectedAnnouncementId)) {
+      state.selectedAnnouncementId = items.length ? items[0].id : null;
+    }
+    els.folderTitle.textContent = "Announcements";
+    els.folderCount.textContent = items.length + " announcement" + (items.length === 1 ? "" : "s");
+    els.filterChips.hidden = true;
+    if (!items.length) {
+      els.messageList.innerHTML =
+        '<div class="empty-state">' +
+          '<span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg></span>' +
+          "<strong>" + (state.query ? "No announcements found" : "No announcements yet") + "</strong>" +
+          "<p>" + (state.profile.role === "teacher" ? "Post an update for this section." : "Your teacher has not posted an update yet.") + "</p>" +
+        "</div>";
+      return;
+    }
+    els.messageList.innerHTML = items
+      .map((announcement) => {
+        const active = !state.workFormOpen && announcement.id === state.selectedAnnouncementId;
+        return (
+          '<button type="button" class="work-row' + (active ? " active" : "") + '" data-action="select-announcement" data-id="' + escapeHtml(announcement.id) + '">' +
+            '<span class="work-mark"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg></span>' +
+            '<span class="work-copy"><strong>' + escapeHtml(announcement.title) + "</strong><small>" + escapeHtml(createSnippet(announcement.body, 72)) + "</small></span>" +
+            "<time>" + escapeHtml(formatDate(announcement.createdAt)) + "</time>" +
+          "</button>"
+        );
+      })
+      .join("");
+  }
+
+  function submissionDraftChipsHtml() {
+    const files = state.submissionDraftFiles || [];
+    if (!files.length) return "";
+    return (
+      '<div class="draft-files">' +
+        files
+          .map((file, index) => {
+            return (
+              '<div class="attachment-card">' +
+                fileTileHtml(file) +
+                '<span class="attachment-info"><strong class="attachment-name">' + escapeHtml(file.name) + "</strong>" +
+                  '<span class="attachment-meta">' + escapeHtml(formatFileSize(file.size)) + "</span></span>" +
+                '<button type="button" class="attachment-remove" data-action="remove-submission-file" data-index="' + index + '" aria-label="Remove ' + escapeHtml(file.name) + '">' +
+                  '<svg class="icon icon-sm" aria-hidden="true"><use href="#i-close"></use></svg>' +
+                "</button>" +
+              "</div>"
+            );
+          })
+          .join("") +
+      "</div>"
+    );
+  }
+
+  function submissionFileRowsHtml(submission) {
+    const files = filesForSubmission(submission.id);
+    if (!files.length) return '<p class="roster-hint">No files attached.</p>';
+    return (
+      '<div class="submission-files">' +
+        files
+          .map((file) => {
+            return (
+              '<button type="button" class="submission-file" data-action="open-submission-file" data-path="' + escapeHtml(file.path) + '" data-name="' + escapeHtml(file.name) + '" data-size="' + escapeHtml(file.size) + '" data-type="' + escapeHtml(file.type) + '">' +
+                fileTileHtml(file) +
+                '<span><strong>' + escapeHtml(file.name) + "</strong><small>" + escapeHtml(formatFileSize(file.size)) + "</small></span>" +
+              "</button>"
+            );
+          })
+          .join("") +
+      "</div>"
+    );
+  }
+
+  function renderAssignmentDetail() {
+    const isTeacher = state.profile.role === "teacher";
+    const assignment = state.workFormOpen ? null : state.assignments.find((item) => item.id === state.selectedAssignmentId);
+    if (!assignment) {
+      if (!isTeacher) {
+        els.detailContent.innerHTML =
+          '<div class="empty-state detail-empty">' +
+            '<span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg></span>' +
+            "<strong>Choose an assignment</strong><p>Select an assignment to see what is due and turn in your work.</p>" +
+          "</div>";
+        return;
+      }
+      els.detailContent.innerHTML =
+        '<div class="detail-toolbar"><span class="toolbar-title">New assignment</span></div>' +
+        '<div class="detail-wrap">' +
+          '<h1>Create an assignment</h1>' +
+          '<p class="roster-intro">Post the task, add a due date, and students can turn in their work right here.</p>' +
+          '<form id="assignmentForm" class="roster-form">' +
+            '<div class="roster-fields">' +
+              '<label>Title<input name="title" type="text" maxlength="100" placeholder="e.g. Chapter 5 questions" required></label>' +
+              '<label>Due date<input name="dueAt" type="datetime-local"></label>' +
+            "</div>" +
+            '<label class="work-field">Instructions<textarea name="instructions" rows="6" placeholder="What should students do?"></textarea></label>' +
+            '<button class="btn primary" type="submit">Post assignment</button>' +
+          "</form>" +
+        "</div>";
+      return;
+    }
+    if (!isTeacher && state.submissionDraftFor !== assignment.id) {
+      const mine = mySubmission(assignment.id);
+      state.submissionDraftFor = assignment.id;
+      state.submissionDraftBody = mine ? mine.body : "";
+      state.submissionDraftFiles = mine ? filesForSubmission(mine.id).map((file) => Object.assign({}, file)) : [];
+    }
+    const submissions = submissionsFor(assignment.id);
+    const mine = isTeacher ? null : mySubmission(assignment.id);
+    let body = "";
+    if (isTeacher) {
+      const cards = submissions
+        .sort((a, b) => b.submittedAt - a.submittedAt)
+        .map((submission) => {
+          const student = state.members.find((member) => member.uid === submission.studentId);
+          const name = student ? student.name : "Student";
+          return (
+            '<article class="submission-card">' +
+              '<div class="submission-head"><span class="avatar">' + escapeHtml(initials(name)) + "</span>" +
+                '<span><strong>' + escapeHtml(name) + "</strong><small>" + escapeHtml(formatFullDate(submission.submittedAt)) + "</small></span>" +
+                '<span class="admin-pill ' + (submission.gradedAt != null ? "good" : "progress") + '">' + (submission.gradedAt != null ? "Graded" : "Submitted") + "</span>" +
+              "</div>" +
+              '<div class="message-body">' + linkify(submission.body || "No written response.") + "</div>" +
+              submissionFileRowsHtml(submission) +
+              '<form id="gradeForm" class="grade-form" data-id="' + escapeHtml(submission.id) + '">' +
+                '<div class="roster-fields">' +
+                  '<label>Grade<input name="grade" type="text" maxlength="24" value="' + escapeHtml(submission.grade) + '" placeholder="e.g. A or 92"></label>' +
+                  '<label>Feedback<input name="feedback" type="text" maxlength="160" value="' + escapeHtml(submission.feedback) + '" placeholder="One short note"></label>' +
+                "</div>" +
+                '<button class="btn ghost" type="submit">Save feedback</button>' +
+              "</form>" +
+            "</article>"
+          );
+        })
+        .join("");
+      body =
+        '<section class="work-section">' +
+          '<div class="work-section-head"><h2>Submissions</h2><span>' + submissions.length + " turned in</span></div>" +
+          (cards || '<div class="empty-state"><strong>No submissions yet</strong><p>Student work will appear here as it is turned in.</p></div>') +
+        "</section>";
+    } else if (mine && mine.gradedAt != null) {
+      body =
+        '<section class="work-section">' +
+          '<div class="work-section-head"><h2>Your submission</h2><span class="admin-pill good">Graded</span></div>' +
+          '<div class="message-body">' + linkify(mine.body || "No written response.") + "</div>" +
+          submissionFileRowsHtml(mine) +
+          '<div class="work-feedback"><strong>Teacher feedback</strong><p>' + escapeHtml(mine.grade ? "Grade: " + mine.grade : "Returned") + "</p>" +
+            '<div class="message-body">' + linkify(mine.feedback || "No written feedback.") + "</div></div>" +
+        "</section>";
+    } else {
+      body =
+        '<section class="work-section">' +
+          '<div class="work-section-head"><h2>' + (mine ? "Update your submission" : "Turn in your work") + "</h2></div>" +
+          '<form id="submitForm" class="roster-form" data-id="' + escapeHtml(assignment.id) + '">' +
+            '<label class="work-field">Your response<textarea name="body" rows="6" placeholder="Write your answer here">' + escapeHtml(state.submissionDraftBody) + "</textarea></label>" +
+            '<label class="btn ghost work-upload">Attach files<input type="file" multiple hidden data-action="submission-files" data-id="' + escapeHtml(assignment.id) + '"></label>' +
+            submissionDraftChipsHtml() +
+            '<button class="btn primary" type="submit">' + (mine ? "Update submission" : "Submit assignment") + "</button>" +
+          "</form>" +
+        "</section>";
+    }
+    els.detailContent.innerHTML =
+      '<div class="detail-toolbar">' +
+        '<span class="toolbar-title">Assignment</span>' +
+        '<div class="work-actions">' +
+          (isTeacher ? '<button class="btn ghost" type="button" data-action="new-assignment">New assignment</button>' +
+            '<button class="btn ghost danger" type="button" data-action="delete-assignment" data-id="' + escapeHtml(assignment.id) + '">Delete</button>' : "") +
+          '<button class="btn ghost" type="button" data-action="back">Back</button>' +
+        "</div>" +
+      "</div>" +
+      '<div class="detail-wrap work-detail">' +
+        '<div class="work-head"><h1>' + escapeHtml(assignment.title) + "</h1>" +
+          '<p class="work-meta">' + escapeHtml(dueLabel(assignment)) + " · " + escapeHtml(formatFullDate(assignment.createdAt)) + "</p>" +
+          '<div class="message-body">' + linkify(assignment.instructions || "No extra instructions.") + "</div>" +
+        "</div>" +
+        body +
+      "</div>";
+  }
+
+  function renderAnnouncementDetail() {
+    const isTeacher = state.profile.role === "teacher";
+    const announcement = state.workFormOpen ? null : state.announcements.find((item) => item.id === state.selectedAnnouncementId);
+    if (!announcement) {
+      if (!isTeacher) {
+        els.detailContent.innerHTML =
+          '<div class="empty-state detail-empty">' +
+            '<span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg></span>' +
+            "<strong>Choose an announcement</strong><p>Select an update to read it here.</p>" +
+          "</div>";
+        return;
+      }
+      els.detailContent.innerHTML =
+        '<div class="detail-toolbar"><span class="toolbar-title">New announcement</span></div>' +
+        '<div class="detail-wrap">' +
+          '<h1>Post an announcement</h1>' +
+          '<p class="roster-intro">Share one update with everyone in this section.</p>' +
+          '<form id="announcementForm" class="roster-form">' +
+            '<div class="roster-fields">' +
+              '<label>Title<input name="title" type="text" maxlength="100" placeholder="e.g. Friday lab moved" required></label>' +
+            "</div>" +
+            '<label class="work-field">Message<textarea name="body" rows="7" placeholder="What does the class need to know?"></textarea></label>' +
+            '<button class="btn primary" type="submit">Post announcement</button>' +
+          "</form>" +
+        "</div>";
+      return;
+    }
+    els.detailContent.innerHTML =
+      '<div class="detail-toolbar">' +
+        '<span class="toolbar-title">Announcement</span>' +
+        '<div class="work-actions">' +
+          (isTeacher ? '<button class="btn ghost" type="button" data-action="new-announcement">New announcement</button>' +
+            '<button class="btn ghost danger" type="button" data-action="delete-announcement" data-id="' + escapeHtml(announcement.id) + '">Delete</button>' : "") +
+          '<button class="btn ghost" type="button" data-action="back">Back</button>' +
+        "</div>" +
+      "</div>" +
+      '<div class="detail-wrap work-detail">' +
+        '<article class="announcement-card">' +
+          '<div class="announcement-meta">' + escapeHtml(formatFullDate(announcement.createdAt)) + "</div>" +
+          "<h1>" + escapeHtml(announcement.title) + "</h1>" +
+          '<div class="message-body">' + linkify(announcement.body || "No message text.") + "</div>" +
+        "</article>" +
+      "</div>";
+  }
+
   function renderList() {
     if (state.folder === "dashboard") {
       renderAdminList();
@@ -1725,6 +2319,14 @@
     }
     if (state.folder === "roster") {
       renderRosterList();
+      return;
+    }
+    if (state.folder === "assignments") {
+      renderAssignmentsList();
+      return;
+    }
+    if (state.folder === "announcements") {
+      renderAnnouncementsList();
       return;
     }
     const items = currentItems();
@@ -2051,6 +2653,14 @@
       renderRosterDetail();
       return;
     }
+    if (state.folder === "assignments") {
+      renderAssignmentDetail();
+      return;
+    }
+    if (state.folder === "announcements") {
+      renderAnnouncementDetail();
+      return;
+    }
     const items = currentItems();
     const item = items.find((entry) => entry.id === state.openId && entry.kind === state.openKind);
     if (!item) {
@@ -2179,15 +2789,23 @@
     renderList();
     try {
       const code = state.profile.classCode;
-      const [members, messages, drafts, settings] = await Promise.all([
+      const [members, messages, drafts, settings, assignments, submissions, submissionFiles, announcements] = await Promise.all([
         backend.getMembers(code),
         backend.getMessages(code),
         backend.getDrafts(code, state.profile.uid),
-        backend.getClassSettings(code).catch(() => ({ studentMessaging: true }))
+        backend.getClassSettings(code).catch(() => ({ studentMessaging: true })),
+        backend.getAssignments(code).catch(() => []),
+        backend.getSubmissions(code).catch(() => []),
+        backend.getSubmissionFiles(code).catch(() => []),
+        backend.getAnnouncements(code).catch(() => [])
       ]);
       state.members = members;
       state.messages = messages;
       state.drafts = drafts;
+      state.assignments = assignments;
+      state.submissions = submissions;
+      state.submissionFiles = submissionFiles;
+      state.announcements = announcements;
       state.settings = settings || { studentMessaging: true };
       ensureSelection();
       renderAll();
@@ -2232,6 +2850,8 @@
   }
 
   function refresh() {
+    const activeForm = els.detailContent.querySelector("form");
+    if (activeForm && activeForm.contains(document.activeElement)) return;
     if (state.folder === "dashboard") loadAdminOverview();
     else loadAll();
   }
@@ -2258,6 +2878,12 @@
     state.messageFiles = [];
     state.selectedStudentId = null;
     state.selectedClassmateId = null;
+    state.selectedAssignmentId = null;
+    state.selectedAnnouncementId = null;
+    state.workFormOpen = false;
+    state.submissionDraftFor = null;
+    state.submissionDraftBody = "";
+    state.submissionDraftFiles = [];
     els.searchInput.value = "";
     els.clearSearch.hidden = true;
     els.appShell.setAttribute("data-view", "list");
@@ -2295,6 +2921,12 @@
       state.messageFiles = [];
       state.selectedStudentId = null;
       state.selectedClassmateId = null;
+      state.selectedAssignmentId = null;
+      state.selectedAnnouncementId = null;
+      state.workFormOpen = false;
+      state.submissionDraftFor = null;
+      state.submissionDraftBody = "";
+      state.submissionDraftFiles = [];
       els.appShell.setAttribute("data-view", "list");
       renderSidebar();
       refresh();
@@ -2745,6 +3377,16 @@
     state.members = [];
     state.messages = [];
     state.drafts = [];
+    state.assignments = [];
+    state.submissions = [];
+    state.submissionFiles = [];
+    state.announcements = [];
+    state.selectedAssignmentId = null;
+    state.selectedAnnouncementId = null;
+    state.workFormOpen = false;
+    state.submissionDraftFor = null;
+    state.submissionDraftBody = "";
+    state.submissionDraftFiles = [];
     state.openId = null;
     state.openKind = null;
     state.adminOverview = null;
@@ -2821,6 +3463,25 @@
       renderRosterDetail();
       return;
     }
+    if (action === "select-assignment") {
+      state.selectedAssignmentId = id;
+      state.workFormOpen = false;
+      state.submissionDraftFor = null;
+      state.submissionDraftBody = "";
+      state.submissionDraftFiles = [];
+      renderAssignmentsList();
+      renderAssignmentDetail();
+      els.appShell.setAttribute("data-view", "detail");
+      return;
+    }
+    if (action === "select-announcement") {
+      state.selectedAnnouncementId = id;
+      state.workFormOpen = false;
+      renderAnnouncementsList();
+      renderAnnouncementDetail();
+      els.appShell.setAttribute("data-view", "detail");
+      return;
+    }
     if (action === "star") {
       toggleStar(id);
       return;
@@ -2859,6 +3520,46 @@
       return;
     }
     if (action === "admin-toggle-messaging") return;
+    if (action === "new-assignment") {
+      state.workFormOpen = true;
+      state.submissionDraftFor = null;
+      state.submissionDraftFiles = [];
+      renderAssignmentsList();
+      renderAssignmentDetail();
+      setTimeout(() => { const input = document.querySelector('#assignmentForm input[name="title"]'); if (input) input.focus(); }, 0);
+      return;
+    }
+    if (action === "new-announcement") {
+      state.workFormOpen = true;
+      renderAnnouncementsList();
+      renderAnnouncementDetail();
+      setTimeout(() => { const input = document.querySelector('#announcementForm input[name="title"]'); if (input) input.focus(); }, 0);
+      return;
+    }
+    if (action === "delete-assignment") {
+      deleteAssignmentItem(id);
+      return;
+    }
+    if (action === "delete-announcement") {
+      deleteAnnouncementItem(id);
+      return;
+    }
+    if (action === "remove-submission-file") {
+      const body = document.querySelector('#submitForm textarea[name="body"]');
+      if (body) state.submissionDraftBody = body.value;
+      state.submissionDraftFiles.splice(Number(button.getAttribute("data-index")), 1);
+      renderAssignmentDetail();
+      return;
+    }
+    if (action === "open-submission-file") {
+      openStoredFile(
+        button.getAttribute("data-path"),
+        button.getAttribute("data-name"),
+        Number(button.getAttribute("data-size")) || 0,
+        button.getAttribute("data-type")
+      );
+      return;
+    }
     if (action === "back") {
       els.appShell.setAttribute("data-view", "list");
       return;
@@ -2889,9 +3590,177 @@
     if (action === "delete-draft") deleteDraftItem(id);
   }
 
-  async function handleRosterSubmit(event) {
+  async function deleteAssignmentItem(assignmentId) {
+    if (!window.confirm("Delete this assignment and all of its submissions?")) return;
+    try {
+      await backend.deleteAssignment(state.profile.classCode, assignmentId);
+      state.selectedAssignmentId = null;
+      state.workFormOpen = false;
+      await loadAll();
+      renderList();
+      renderDetail();
+      showToast("Assignment deleted", "success");
+    } catch (error) {
+      showToast("Could not delete assignment: " + friendlyError(error), "error");
+    }
+  }
+
+  async function deleteAnnouncementItem(announcementId) {
+    if (!window.confirm("Delete this announcement?")) return;
+    try {
+      await backend.deleteAnnouncement(state.profile.classCode, announcementId);
+      state.selectedAnnouncementId = null;
+      state.workFormOpen = false;
+      await loadAll();
+      renderList();
+      renderDetail();
+      showToast("Announcement deleted", "success");
+    } catch (error) {
+      showToast("Could not delete announcement: " + friendlyError(error), "error");
+    }
+  }
+
+  async function openStoredFile(path, name, size, type) {
+    if (!path || path === "#") {
+      showToast("File preview is not available in demo mode.");
+      return;
+    }
+    try {
+      const url = await backend.fileUrl(path);
+      if (/^image\//i.test(type || "")) openLightbox(name || "File", size || 0, url);
+      else window.open(url, "_blank", "noopener");
+    } catch (error) {
+      showToast("Could not open file: " + friendlyError(error), "error");
+    }
+  }
+
+  async function handleSubmissionFileSelect(event) {
+    const input = event.target;
+    const assignmentId = input.getAttribute("data-id") || state.selectedAssignmentId;
+    const files = Array.from(input.files || []);
+    input.value = "";
+    const body = document.querySelector('#submitForm textarea[name="body"]');
+    if (body) state.submissionDraftBody = body.value;
+    if (!files.length || !state.profile) return;
+    if (state.submissionDraftFor !== assignmentId) {
+      state.submissionDraftFor = assignmentId;
+      state.submissionDraftFiles = [];
+    }
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        showToast(file.name + " is larger than 10 MB.", "error");
+        continue;
+      }
+      if (!isAllowedFileType(file)) {
+        showToast(file.name + " has an unsupported file type.", "error");
+        continue;
+      }
+      try {
+        const uploaded = await backend.uploadSubmissionFile(state.profile.classCode, state.profile.uid, file);
+        state.submissionDraftFiles.push(uploaded);
+      } catch (error) {
+        showToast("Could not upload " + file.name + ": " + friendlyError(error), "error");
+      }
+    }
+    renderAssignmentDetail();
+  }
+
+  async function handleDetailSubmit(event) {
     event.preventDefault();
     const form = event.target;
+    if (form.id === "assignmentForm") {
+      const title = form.elements.title.value.trim();
+      const instructions = form.elements.instructions.value.trim();
+      const dueValue = form.elements.dueAt.value;
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        await backend.createAssignment(state.profile.classCode, {
+          title,
+          instructions,
+          dueAt: dueValue ? new Date(dueValue).toISOString() : null
+        });
+        state.workFormOpen = false;
+        await loadAll();
+        renderList();
+        renderDetail();
+        showToast("Assignment posted", "success");
+      } catch (error) {
+        showToast("Could not post assignment: " + friendlyError(error), "error");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+    if (form.id === "announcementForm") {
+      const title = form.elements.title.value.trim();
+      const body = form.elements.body.value.trim();
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        await backend.createAnnouncement(state.profile.classCode, { title, body });
+        state.workFormOpen = false;
+        await loadAll();
+        renderList();
+        renderDetail();
+        showToast("Announcement posted", "success");
+      } catch (error) {
+        showToast("Could not post announcement: " + friendlyError(error), "error");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+    if (form.id === "gradeForm") {
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        await backend.gradeSubmission(
+          state.profile.classCode,
+          form.getAttribute("data-id"),
+          form.elements.grade.value.trim(),
+          form.elements.feedback.value.trim()
+        );
+        await loadAll();
+        renderList();
+        renderDetail();
+        showToast("Feedback saved", "success");
+      } catch (error) {
+        showToast("Could not save feedback: " + friendlyError(error), "error");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+    if (form.id === "submitForm") {
+      const body = form.elements.body.value.trim();
+      if (!body && !state.submissionDraftFiles.length) {
+        showToast("Write a response or attach a file before submitting.", "error");
+        return;
+      }
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        await backend.saveSubmission(state.profile.classCode, {
+          assignmentId: form.getAttribute("data-id"),
+          studentId: state.profile.uid,
+          body,
+          files: state.submissionDraftFiles.map((file) => ({ name: file.name, path: file.path, size: file.size, type: file.type }))
+        });
+        state.submissionDraftFor = null;
+        state.submissionDraftBody = "";
+        state.submissionDraftFiles = [];
+        await loadAll();
+        renderList();
+        renderDetail();
+        showToast("Submission turned in", "success");
+      } catch (error) {
+        showToast("Could not turn in work: " + friendlyError(error), "error");
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
     if (form.id === "addStudentForm") {
       const name = $("newStudentName").value.trim();
       const password = $("newStudentPassword").value;
@@ -2992,6 +3861,11 @@
     });
 
     els.detailContent.addEventListener("change", async (event) => {
+      const submissionInput = event.target.closest('[data-action="submission-files"]');
+      if (submissionInput) {
+        await handleSubmissionFileSelect(event);
+        return;
+      }
       const input = event.target.closest('[data-action="admin-toggle-messaging"]');
       if (!input) return;
       const code = input.getAttribute("data-code");
@@ -3060,7 +3934,7 @@
 
     els.messageList.addEventListener("click", handleMessageListClick);
     els.detailContent.addEventListener("click", handleDetailClick);
-    els.detailContent.addEventListener("submit", handleRosterSubmit);
+    els.detailContent.addEventListener("submit", handleDetailSubmit);
     els.detailContent.addEventListener("click", (event) => {
       if (event.target.closest("#messageFiles")) handleMessageFileClick(event);
     });
