@@ -28,7 +28,7 @@ export function AuthScreen({ api }: { api: AppApi }) {
       <div className="auth-art">
         <div className="brand brand-art">
           <span className="school-logo-wrap">
-            <img src="valley-of-peace-logo.png" width="428" height="467" alt="Valley of Peace SDA Academy logo" />
+            <img src="/valley-of-peace-logo.png" width="428" height="467" alt="Valley of Peace SDA Academy logo" />
           </span>
           <span className="brand-copy">
             <strong>Valley of Peace SDA Academy</strong>

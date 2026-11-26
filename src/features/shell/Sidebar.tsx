@@ -57,7 +57,7 @@ export function Sidebar({ api }: { api: AppApi }) {
         <div className="sidebar-head">
           <div className="brand">
             <span className="brand-mark small school-mark">
-              <img src="valley-of-peace-logo.png" width="428" height="467" alt="Valley of Peace SDA Academy logo" />
+              <img src="/valley-of-peace-logo.png" width="428" height="467" alt="Valley of Peace SDA Academy logo" />
             </span>
             <span>Vopa Mail</span>
           </div>

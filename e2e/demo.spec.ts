@@ -61,6 +61,7 @@ test("supports deep links and browser history", async ({ page }) => {
 
   await page.goto("/mail/inbox/item/demo-message-2?demo=1");
   await expect(page.getByRole("heading", { name: "Reminder: bring your notebook" })).toBeVisible();
+  expect(await page.locator("#sidebar img").evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 
   await page.goBack();
   await expect(page).toHaveURL(/\/mail\/inbox\?demo=1/);
