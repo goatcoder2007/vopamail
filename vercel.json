@@ -1,3 +1,9 @@
 {
-  "outputDirectory": "public"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/((?!assets/|[^/]+\\.(?:js|css|png|svg|ico|json)$).*)",
+      "destination": "/index.html"
+    }
+  ]
 }

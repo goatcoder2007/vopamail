@@ -3,9 +3,15 @@
 
 # Local Playwright artifacts
 .playwright-cli
+playwright-report
+test-results
 
 # Local design review artifacts
 .impeccable
+
+# Dependencies and build output
+node_modules
+dist
 
 # Local Supabase temporary files
 supabase/.temp
