@@ -34,6 +34,7 @@ import {
   rememberSection,
   saveSession,
   scanModeration,
+  touchSession,
   validateClassCode
 } from "./utils";
 import type {
@@ -1354,18 +1355,38 @@ export function useVopaApp() {
 
   useEffect(() => {
     if (!state.profile) return;
+    const expireIfIdle = () => {
+      if (!readSession()) {
+        clearSession();
+        void backendRef.current?.signOut().catch(() => {});
+        showAuth();
+        showToast("Session expired. Please sign in again.", "info");
+        return true;
+      }
+      return false;
+    };
+    const onActivity = () => {
+      if (expireIfIdle()) return;
+      touchSession();
+    };
     const interval = window.setInterval(() => {
+      if (expireIfIdle()) return;
       if (!document.hidden) refreshRef.current();
     }, 20000);
     const onVisible = () => {
+      if (expireIfIdle()) return;
+      touchSession();
       if (!document.hidden) refreshRef.current();
     };
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "focus"];
+    events.forEach((event) => window.addEventListener(event, onActivity, { passive: true }));
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.clearInterval(interval);
+      events.forEach((event) => window.removeEventListener(event, onActivity));
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [state.profile]);
+  }, [state.profile, showAuth, showToast]);
 
   useEffect(() => {
     document.body.classList.toggle("demo-banner-visible", demoMode);

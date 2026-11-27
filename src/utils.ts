@@ -2,7 +2,15 @@ import { FOLDER_LABELS } from "./constants";
 import type { ClassSettings, Profile, Role } from "./types";
 
 export const SESSION_KEY = "classroomMail.session.v1";
+export const SESSION_IDLE_MS = 45 * 60 * 1000;
+export const SESSION_TOUCH_MS = 5 * 60 * 1000;
 export const SECTIONS_KEY = "classroomMail.sections.v1";
+
+interface StoredSession {
+  profile: Profile;
+  lastActiveAt: number;
+  signedInAt: number;
+}
 
 export function readJson<T>(key: string, fallback: T): T {
   try {
@@ -18,15 +26,52 @@ export function writeJson(key: string, value: unknown) {
 }
 
 export function saveSession(profile: Profile) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(profile));
+  const now = Date.now();
+  const session: StoredSession = { profile, lastActiveAt: now, signedInAt: now };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
 export function readSession(): Profile | null {
   try {
     const value = localStorage.getItem(SESSION_KEY);
-    return value ? (JSON.parse(value) as Profile) : null;
+    if (!value) return null;
+    const parsed = JSON.parse(value) as Profile | StoredSession;
+    const now = Date.now();
+    if (parsed && typeof parsed === "object" && "profile" in parsed && "lastActiveAt" in parsed) {
+      const session = parsed as StoredSession;
+      if (now - Number(session.lastActiveAt || 0) > SESSION_IDLE_MS) {
+        clearSession();
+        return null;
+      }
+      return session.profile as Profile;
+    }
+    const profile = parsed as Profile;
+    if (profile && profile.uid) {
+      saveSession(profile);
+      return profile;
+    }
+    return null;
   } catch {
     return null;
+  }
+}
+
+export function touchSession() {
+  try {
+    const value = localStorage.getItem(SESSION_KEY);
+    if (!value) return;
+    const parsed = JSON.parse(value) as StoredSession;
+    if (!parsed || typeof parsed !== "object" || !("profile" in parsed)) return;
+    const now = Date.now();
+    const last = Number(parsed.lastActiveAt || 0);
+    if (now - last < SESSION_TOUCH_MS) return;
+    if (now - last > SESSION_IDLE_MS) {
+      clearSession();
+      return;
+    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...parsed, lastActiveAt: now }));
+  } catch {
+    // ignore
   }
 }
 
