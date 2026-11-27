@@ -31,7 +31,8 @@ import {
   readSections,
   rememberSection,
   saveSession,
-  scanModeration
+  scanModeration,
+  validateClassCode
 } from "./utils";
 import type {
   Assignment,
@@ -411,9 +412,12 @@ export function useVopaApp() {
     async (requestedCode: string | undefined, options: { keepFolder?: boolean } = {}) => {
       const current = stateRef.current;
       if (!current.profile || current.profile.role !== "teacher") return;
-      const code = String(requestedCode || "").trim();
-      if (!/^[A-Za-z0-9-]{3,24}$/.test(code)) {
-        showToast("Use a section code with 3–24 letters, numbers, or dashes.", "error");
+      let code: string;
+      try {
+        code = validateClassCode(requestedCode || "");
+        await backendRef.current?.ensureSection?.(code);
+      } catch (error) {
+        showToast(friendlyError(error), "error");
         return;
       }
       if (code === current.profile.classCode) {

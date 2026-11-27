@@ -18,6 +18,7 @@ import {
   rememberSection,
   saveSession,
   scanModeration,
+  validateClassCode,
   validatePassword
 } from "./utils";
 
@@ -58,6 +59,12 @@ describe("utils", () => {
   it("validates the minimum password length", () => {
     expect(() => validatePassword("12345")).toThrow(/at least 6 characters/);
     expect(() => validatePassword("123456")).not.toThrow();
+  });
+
+  it("validates section codes", () => {
+    expect(validateClassCode("  IT101  ")).toBe("IT101");
+    expect(() => validateClassCode("AB")).toThrow(/3–24 letters/);
+    expect(() => validateClassCode("bad_code")).toThrow(/3–24 letters/);
   });
 
   it("hashes consistently and distinguishes different values", () => {

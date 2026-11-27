@@ -238,17 +238,19 @@ set search_path = public, extensions
 as $$
 declare
   v_class_code text;
+  v_teacher_id uuid;
 begin
-  select s.class_code
-  into v_class_code
+  select s.class_code, a.teacher_id
+  into v_class_code, v_teacher_id
   from public.assignment_submissions s
+  join public.assignments a on a.id = s.assignment_id
   where s.id = p_submission_id;
 
   if v_class_code is null then
     raise exception 'Submission not found';
   end if;
 
-  if not public.is_teacher(v_class_code) then
+  if not public.is_teacher(v_class_code) or v_teacher_id <> auth.uid() then
     raise exception 'Not authorized';
   end if;
 
@@ -263,36 +265,6 @@ $$;
 
 revoke all on function public.grade_submission(uuid, text, text) from public;
 grant execute on function public.grade_submission(uuid, text, text) to authenticated;
-
-drop policy if exists class_files_insert on storage.objects;
-create policy class_files_insert on storage.objects
-for insert to authenticated
-with check (
-  bucket_id = 'class-files'
-  and public.is_member(split_part(name, '/', 1))
-  and (
-    split_part(name, '/', 2) <> 'submissions'
-    or (
-      split_part(name, '/', 3) = auth.uid()::text
-      or public.is_teacher(split_part(name, '/', 1))
-    )
-  )
-);
-
-drop policy if exists class_files_delete on storage.objects;
-create policy class_files_delete on storage.objects
-for delete to authenticated
-using (
-  bucket_id = 'class-files'
-  and public.is_member(split_part(name, '/', 1))
-  and (
-    split_part(name, '/', 2) <> 'submissions'
-    or (
-      split_part(name, '/', 3) = auth.uid()::text
-      or public.is_teacher(split_part(name, '/', 1))
-    )
-  )
-);
 
 revoke all on public.assignments from anon, authenticated;
 grant select, insert, update, delete on public.assignments to authenticated;

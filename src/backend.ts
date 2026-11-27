@@ -15,7 +15,7 @@ import type {
   Submission,
   SubmissionFile
 } from "./types";
-import { hashHex, normalizeName, readJson, validatePassword, writeJson } from "./utils";
+import { hashHex, normalizeName, readJson, validateClassCode, validatePassword, writeJson } from "./utils";
 
 export interface SignInInput {
   classCode: string;
@@ -48,6 +48,7 @@ export interface ModerationAlertPayload {
 
 export interface BackendService {
   signIn(input: SignInInput): Promise<Profile>;
+  ensureSection?(classCode: string): Promise<void>;
   createStudent(input: StudentInput): Promise<void>;
   updateStudent(input: UpdateStudentInput): Promise<void>;
   resetStudentPassword(input: { classCode: string; studentId: string; password: string }): Promise<void>;
@@ -382,6 +383,11 @@ function createDemoBackend(): BackendService {
     updateStudent,
     async resetStudentPassword(input) {
       await updateStudent({ classCode: input.classCode, studentId: input.studentId, name: "", password: input.password });
+    },
+    async ensureSection(classCode) {
+      const code = validateClassCode(classCode);
+      const sections = readSections();
+      if (!sections.includes(code)) writeJson(SECTIONS_KEY, [...sections, code]);
     },
     async verifySession() {
       return true;
@@ -763,6 +769,11 @@ function createSupabaseBackend(): BackendService {
     return Boolean(result.data);
   }
 
+  async function ensureTeacherSection(classCode: string) {
+    const result = await client.rpc("ensure_teacher_section", { p_class_code: validateClassCode(classCode) });
+    if (result.error) throw result.error;
+  }
+
   async function insertMember(profile: Profile) {
     const inserted = await client.from("members").insert({
       id: profile.uid,
@@ -814,9 +825,14 @@ function createSupabaseBackend(): BackendService {
   }
 
   async function getSections() {
-    const result = await client.from("members").select("class_code");
-    if (result.error) throw result.error;
-    return Array.from(new Set(((result.data || []) as any[]).map((row) => row.class_code))).filter(Boolean) as string[];
+    const [memberResult, teacherResult] = await Promise.all([
+      client.from("members").select("class_code"),
+      client.from("teacher_sections").select("class_code")
+    ]);
+    if (memberResult.error) throw memberResult.error;
+    if (teacherResult.error) throw teacherResult.error;
+    const codes = [...(memberResult.data || []), ...(teacherResult.data || [])] as any[];
+    return Array.from(new Set(codes.map((row) => row.class_code))).filter(Boolean) as string[];
   }
 
   return {
@@ -868,9 +884,13 @@ function createSupabaseBackend(): BackendService {
       if (existing.role === "teacher") {
         const home = teacherHomeClassCode || input.classCode;
         const activeCode = input.classCode.toLowerCase() === String(home).toLowerCase() ? home : input.classCode;
+        await ensureTeacherSection(activeCode);
         return { ...existing, classCode: activeCode };
       }
       return existing;
+    },
+    async ensureSection(classCode) {
+      await ensureTeacherSection(classCode);
     },
     async createStudent(input) {
       validatePassword(input.password);

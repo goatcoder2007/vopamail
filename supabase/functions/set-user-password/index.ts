@@ -96,16 +96,17 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Password must be at least 6 characters" }, 400);
   }
 
-  const { data: teacher, error: teacherError } = await userClient
-    .from("members")
-    .select("role")
-    .eq("id", authData.user.id)
+  const { data: teacherSection, error: teacherSectionError } = await userClient
+    .from("teacher_sections")
+    .select("class_code")
+    .eq("teacher_id", authData.user.id)
+    .eq("class_code", classCode)
     .maybeSingle();
-  if (teacherError) {
-    return json({ error: teacherError.message }, 500);
+  if (teacherSectionError) {
+    return json({ error: "Could not verify teacher access" }, 500);
   }
-  if (!teacher || teacher.role !== "teacher") {
-    return json({ error: "Only a teacher can edit student accounts" }, 403);
+  if (!teacherSection) {
+    return json({ error: "Only a teacher of this section can edit student accounts" }, 403);
   }
 
   const admin = createClient(supabaseUrl, secretKey, {
@@ -119,7 +120,7 @@ Deno.serve(async (req: Request) => {
     .eq("role", "student")
     .maybeSingle();
   if (studentError) {
-    return json({ error: studentError.message }, 500);
+    return json({ error: "Could not look up that student" }, 500);
   }
   if (!student) {
     return json({ error: "That student is not in this section" }, 404);
@@ -136,7 +137,7 @@ Deno.serve(async (req: Request) => {
       .neq("id", studentId)
       .maybeSingle();
     if (existingError) {
-      return json({ error: existingError.message }, 500);
+      return json({ error: "Could not check that student name" }, 500);
     }
     if (existing) {
       return json({ error: "That name is already used in this section" }, 409);
@@ -161,7 +162,7 @@ Deno.serve(async (req: Request) => {
   }
   const { error: updateError } = await admin.auth.admin.updateUserById(studentId, attributes);
   if (updateError) {
-    return json({ error: updateError.message }, 500);
+    return json({ error: "Could not update that account" }, 500);
   }
 
   if (newName) {
@@ -170,7 +171,7 @@ Deno.serve(async (req: Request) => {
       .update({ name: newName, name_lower: normalizeName(newName) })
       .eq("id", studentId);
     if (memberError) {
-      return json({ error: memberError.message }, 500);
+      return json({ error: "Could not update that student" }, 500);
     }
   }
 

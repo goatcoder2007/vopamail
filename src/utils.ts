@@ -74,6 +74,14 @@ export function validatePassword(value: string) {
   }
 }
 
+export function validateClassCode(value: string) {
+  const code = String(value || "").trim();
+  if (!/^[A-Za-z0-9-]{3,24}$/.test(code)) {
+    throw new Error("Use a section code with 3–24 letters, numbers, or dashes.");
+  }
+  return code;
+}
+
 export function initials(value: string) {
   const parts = normalizeName(value).split(" ").filter(Boolean);
   if (!parts.length) return "?";

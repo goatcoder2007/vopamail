@@ -36,4 +36,6 @@ Supabase settings live in `public/supabase-config.js` and are loaded before the 
 
 ## Supabase setup
 
-Run the SQL files in `supabase/`, plus the Edge Function in `supabase/functions/set-user-password`, before connecting live classes.
+Run the SQL files in `supabase/` in this order before connecting live classes: `schema.sql`, `assignments-announcements.sql`, `class-settings.sql`, `file-sharing.sql`, `moderation.sql`, `viewed-by.sql`, then `storage-policies.sql`. Deploy the Edge Function in `supabase/functions/set-user-password` and set its Supabase secrets.
+
+Teacher access is granted per section in `public.teacher_sections`. The first teacher account is created from the sign-in screen; after that, each section code opened or switched to in the app is granted to that teacher account. If you need to grant an existing teacher access to more sections outside the app, insert rows into `public.teacher_sections` with their `teacher_id` and the section's `class_code`.

@@ -28,7 +28,17 @@ using (public.is_teacher(class_code));
 drop policy if exists moderation_alerts_insert on public.moderation_alerts;
 create policy moderation_alerts_insert on public.moderation_alerts
 for insert to authenticated
-with check (from_id = auth.uid() and public.is_member(class_code));
+with check (
+  from_id = auth.uid()
+  and public.is_member(class_code)
+  and exists (
+    select 1
+    from public.messages m
+    where m.id = message_id
+      and m.class_code = class_code
+      and m.from_id = auth.uid()
+  )
+);
 
 drop policy if exists moderation_alerts_update on public.moderation_alerts;
 create policy moderation_alerts_update on public.moderation_alerts
@@ -36,4 +46,5 @@ for update to authenticated
 using (public.is_teacher(class_code))
 with check (public.is_teacher(class_code));
 
+revoke all on public.moderation_alerts from anon, authenticated;
 grant select, insert, update on public.moderation_alerts to authenticated;

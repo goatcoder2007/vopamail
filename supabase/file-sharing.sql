@@ -37,6 +37,39 @@ create index if not exists message_files_message_idx on public.message_files (me
 
 alter table public.drafts add column if not exists attachments jsonb not null default '[]'::jsonb;
 
+create or replace function public.validate_message_file()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_class_code text;
+  v_to_ids uuid[];
+begin
+  select class_code, to_ids
+  into v_class_code, v_to_ids
+  from public.messages
+  where id = new.message_id;
+
+  if not found
+    or v_class_code <> new.class_code
+    or v_to_ids <> new.to_ids
+    or new.from_id <> auth.uid() then
+    raise exception 'Invalid message attachment';
+  end if;
+  if split_part(new.storage_path, '/', 1) <> new.class_code then
+    raise exception 'Invalid attachment path';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists message_files_validate on public.message_files;
+create trigger message_files_validate
+before insert on public.message_files
+for each row execute function public.validate_message_file();
+
 alter table public.message_files enable row level security;
 
 drop policy if exists message_files_select on public.message_files;
@@ -61,27 +94,3 @@ with check (
 
 revoke all on public.message_files from anon, authenticated;
 grant select, insert on public.message_files to authenticated;
-
-drop policy if exists class_files_select on storage.objects;
-create policy class_files_select on storage.objects
-for select to authenticated
-using (
-  bucket_id = 'class-files'
-  and public.is_member(split_part(name, '/', 1))
-);
-
-drop policy if exists class_files_insert on storage.objects;
-create policy class_files_insert on storage.objects
-for insert to authenticated
-with check (
-  bucket_id = 'class-files'
-  and public.is_member(split_part(name, '/', 1))
-);
-
-drop policy if exists class_files_delete on storage.objects;
-create policy class_files_delete on storage.objects
-for delete to authenticated
-using (
-  bucket_id = 'class-files'
-  and public.is_member(split_part(name, '/', 1))
-);

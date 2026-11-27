@@ -10,6 +10,13 @@ create table if not exists public.members (
   unique (class_code, name_lower, role)
 );
 
+create table if not exists public.teacher_sections (
+  teacher_id uuid not null references auth.users(id) on delete cascade,
+  class_code text not null,
+  created_at timestamptz not null default now(),
+  primary key (teacher_id, class_code)
+);
+
 create table if not exists public.messages (
   id uuid primary key default extensions.gen_random_uuid(),
   class_code text not null,
@@ -40,6 +47,20 @@ create index if not exists messages_class_created_idx on public.messages (class_
 create index if not exists messages_to_ids_idx on public.messages using gin (to_ids);
 create index if not exists drafts_user_updated_idx on public.drafts (user_id, updated_at desc);
 
+create or replace function public.has_teacher_role()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select exists (
+    select 1
+    from public.members m
+    where m.id = auth.uid() and m.role = 'teacher'
+  );
+$$;
+
 create or replace function public.is_member(code text)
 returns boolean
 language sql
@@ -55,8 +76,8 @@ as $$
     )
     or exists (
       select 1
-      from public.members m
-      where m.id = auth.uid() and m.role = 'teacher'
+      from public.teacher_sections ts
+      where ts.class_code = code and ts.teacher_id = auth.uid()
     );
 $$;
 
@@ -69,8 +90,8 @@ set search_path = public, extensions
 as $$
   select exists (
     select 1
-    from public.members m
-    where m.id = auth.uid() and m.role = 'teacher'
+    from public.teacher_sections ts
+    where ts.class_code = code and ts.teacher_id = auth.uid()
   );
 $$;
 
@@ -83,8 +104,8 @@ set search_path = public, extensions
 as $$
   select exists (
     select 1
-    from public.members m
-    where m.role = 'teacher'
+    from public.teacher_sections ts
+    where ts.class_code = code
   );
 $$;
 
@@ -97,15 +118,84 @@ set search_path = public, extensions
 as $$
   select not exists (
     select 1
-    from public.members m
-    where m.role = 'teacher'
+    from public.teacher_sections ts
+    where ts.class_code = code
   );
 $$;
 
+create or replace function public.grant_teacher_section()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if new.role = 'teacher' then
+    insert into public.teacher_sections (teacher_id, class_code)
+    values (new.id, new.class_code)
+    on conflict do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.ensure_teacher_section(p_class_code text)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not signed in';
+  end if;
+  if p_class_code !~ '^[A-Za-z0-9-]{3,24}$' then
+    raise exception 'Invalid section code';
+  end if;
+  if not public.has_teacher_role() then
+    raise exception 'Only a teacher can open a section';
+  end if;
+  insert into public.teacher_sections (teacher_id, class_code)
+  values (auth.uid(), p_class_code)
+  on conflict do nothing;
+end;
+$$;
+
+insert into public.teacher_sections (teacher_id, class_code)
+select id, class_code from public.members where role = 'teacher'
+on conflict do nothing;
+
+alter table public.teacher_sections enable row level security;
+
+drop policy if exists teacher_sections_select on public.teacher_sections;
+create policy teacher_sections_select on public.teacher_sections
+for select to authenticated
+using (teacher_id = auth.uid());
+
+drop policy if exists teacher_sections_insert on public.teacher_sections;
+create policy teacher_sections_insert on public.teacher_sections
+for insert to authenticated
+with check (teacher_id = auth.uid() and public.has_teacher_role());
+
+drop trigger if exists members_teacher_section_grant on public.members;
+create trigger members_teacher_section_grant
+after insert or update of role, class_code on public.members
+for each row execute function public.grant_teacher_section();
+
+revoke all on function public.has_teacher_role() from public, anon;
+revoke all on function public.is_member(text) from public, anon;
+revoke all on function public.is_teacher(text) from public, anon;
+revoke all on function public.teacher_exists(text) from public;
+revoke all on function public.can_create_teacher(text) from public, anon;
+grant execute on function public.has_teacher_role() to authenticated;
 grant execute on function public.is_member(text) to authenticated;
 grant execute on function public.is_teacher(text) to authenticated;
 grant execute on function public.teacher_exists(text) to anon, authenticated;
 grant execute on function public.can_create_teacher(text) to authenticated;
+revoke all on function public.ensure_teacher_section(text) from public, anon;
+grant execute on function public.ensure_teacher_section(text) to authenticated;
+revoke all on public.teacher_sections from anon, authenticated;
+grant select, insert on public.teacher_sections to authenticated;
 
 alter table public.members enable row level security;
 alter table public.messages enable row level security;

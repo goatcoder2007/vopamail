@@ -69,6 +69,17 @@ test("teacher dashboard, roster, and assignments load", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Create an assignment" })).toBeVisible();
 });
 
+test("teacher can switch to another section", async ({ page }) => {
+  await signIn(page, { name: "Teacher", password: "teacher123", teacher: true });
+
+  await page.locator("#sectionInput").fill("E2E102");
+  await page.getByRole("button", { name: "Switch section" }).click();
+  await expect(page.locator("#sectionInput")).toHaveValue("E2E102");
+
+  await page.getByRole("button", { name: "Class roster" }).click();
+  await expect(page.getByRole("heading", { name: "Class roster", level: 1 })).toBeVisible();
+});
+
 test("supports deep links and browser history", async ({ page }) => {
   await signIn(page, { name: "Ava Chen", password: "student123" });
 
