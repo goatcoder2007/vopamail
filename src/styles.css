@@ -435,6 +435,14 @@ button:disabled {
   font-size: 0.78rem;
 }
 
+.offline-banner {
+  background: #eef4ff;
+  border-bottom-color: #c9d8f5;
+  color: #1d3b73;
+}
+
+.offline-banner .icon { color: #355ca8; }
+
 .banner-close {
   margin-left: auto;
   display: inline-grid;

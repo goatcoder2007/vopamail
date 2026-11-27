@@ -48,6 +48,8 @@ export interface AppState {
   pendingOpenMessageId: string | null;
   pendingComposeTo: string | null;
   view: "list" | "detail";
+  offline: boolean;
+  offlineSavedAt: number | null;
 }
 
 function itemTime(item: MailItem) {

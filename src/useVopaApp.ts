@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { createBackend, hasKeys } from "./backend";
 import type { BackendService } from "./backend";
 import { TEACHER_FOLDERS } from "./constants";
+import { clearSnapshot, isOfflineError, readSnapshot, saveSnapshot } from "./offlineSnapshot";
 import { parseRoute } from "./routing";
 import type { AppRoute } from "./routing";
 import {
@@ -116,7 +117,9 @@ const initialState: AppState = {
   selectedAdminSection: null,
   pendingOpenMessageId: null,
   pendingComposeTo: null,
-  view: "list"
+  view: "list",
+  offline: false,
+  offlineSavedAt: null
 };
 
 const initialCompose: ComposeState = {
@@ -312,7 +315,12 @@ export function useVopaApp() {
         submissionFiles,
         announcements,
         itemViews,
-        loading: false
+        loading: false,
+        offline: false,
+        offlineSavedAt: null
+      });
+      saveSnapshot(uid, code, {
+        members, messages, drafts, settings: settings || DEFAULT_SETTINGS, assignments, submissions, submissionFiles, announcements, itemViews, adminOverview: stateRef.current.adminOverview
       });
       ensureSelection();
       const after = stateRef.current;
@@ -334,6 +342,15 @@ export function useVopaApp() {
         openCompose({ to });
       }
     } catch (error) {
+      if (isOfflineError(error) && current.profile) {
+        const snap = readSnapshot(current.profile.uid, current.profile.classCode);
+        if (snap) {
+          patch({ ...snap.data, loading: false, offline: true, offlineSavedAt: snap.savedAt });
+          ensureSelection();
+          showToast("Offline. Showing saved data.", "info");
+          return;
+        }
+      }
       showToast(friendlyError(error), "error");
       patch({ loading: false });
     }
@@ -1130,9 +1147,10 @@ export function useVopaApp() {
   const signIn = useCallback(
     async (input: SignInInput) => {
       if (!backendRef.current) return "The mail service is not ready. Please reload.";
+      if (typeof navigator !== "undefined" && !navigator.onLine) return "You're offline. Connect to the internet to sign in.";
       try {
         const profile = await backendRef.current.signIn(input);
-        patch({ profile });
+        patch({ profile, offline: false, offlineSavedAt: null });
         saveSession(profile);
         patch({ folder: "inbox", view: "list" });
         setFolder("inbox");
@@ -1156,6 +1174,8 @@ export function useVopaApp() {
   }, []);
 
   const signOut = useCallback(async () => {
+    const current = stateRef.current;
+    if (current.profile) clearSnapshot(current.profile.uid, current.profile.classCode);
     backendRef.current?.signOut().catch(() => {});
     showAuth();
   }, [showAuth]);
@@ -1342,11 +1362,24 @@ export function useVopaApp() {
           });
           loadSections();
         } else {
-          showAuth();
+          const snap = readSnapshot(saved.uid, saved.classCode);
+          if (snap && !navigator.onLine) {
+            patch({ profile: saved, ...snap.data, offline: true, offlineSavedAt: snap.savedAt });
+            applyRoute({ ...parseRoute(window.location.pathname, window.location.search), sectionCode: saved.classCode });
+          } else {
+            showAuth();
+          }
         }
       })
       .catch(() => {
-        if (!cancelled) showAuth();
+        if (cancelled) return;
+        const snap = readSnapshot(saved.uid, saved.classCode);
+        if (snap) {
+          patch({ profile: saved, ...snap.data, offline: true, offlineSavedAt: snap.savedAt });
+          applyRoute({ ...parseRoute(window.location.pathname, window.location.search), sectionCode: saved.classCode });
+        } else {
+          showAuth();
+        }
       });
     return () => {
       cancelled = true;
@@ -1389,9 +1422,10 @@ export function useVopaApp() {
   }, [state.profile, showAuth, showToast]);
 
   useEffect(() => {
-    document.body.classList.toggle("demo-banner-visible", demoMode);
+    const visible = demoMode || state.offline;
+    document.body.classList.toggle("demo-banner-visible", visible);
     return () => document.body.classList.remove("demo-banner-visible");
-  }, [demoMode]);
+  }, [demoMode, state.offline]);
 
   const derived = {
     items: currentItems(state),

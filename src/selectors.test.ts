@@ -67,6 +67,8 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     pendingOpenMessageId: null,
     pendingComposeTo: null,
     view: "list",
+    offline: false,
+    offlineSavedAt: null,
     ...overrides
   };
 }

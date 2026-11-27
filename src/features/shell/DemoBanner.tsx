@@ -5,6 +5,16 @@ import { Icon } from "../shared/ui";
 
 export function DemoBanner({ api }: { api: AppApi }) {
   const [dismissed, setDismissed] = useState(false);
+  const offline = api.state.offline;
+  if (offline) {
+    const when = api.state.offlineSavedAt ? new Date(api.state.offlineSavedAt).toLocaleString() : "earlier";
+    return (
+      <div className="demo-banner offline-banner">
+        <Icon name="alert" />
+        <span><strong>Offline.</strong> Showing saved data from {when}. Changes need a connection.</span>
+      </div>
+    );
+  }
   return (
     <div id="demoBanner" className="demo-banner" hidden={!api.demoMode || dismissed}>
       <Icon name="alert" />
