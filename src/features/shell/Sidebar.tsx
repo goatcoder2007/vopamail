@@ -38,7 +38,7 @@ export function Sidebar({ api }: { api: AppApi }) {
     { folder: "drafts", icon: "file", label: "Drafts", badge: state.drafts.length, badgeId: "draftBadge" },
     { folder: "trash", icon: "trash", label: "Trash" },
     { folder: "assignments", icon: "file", label: "Assignments" },
-    { folder: "announcements", icon: "layers", label: "Announcements" },
+    { folder: "announcements", icon: "layers", label: "Announcements", badge: derived.unseenAnnouncements, badgeId: "announcementBadge" },
     { folder: "classmates", icon: "users", label: isTeacher ? "Students" : "Classmates", badge: derived.classmates.length, badgeId: "classmateBadge" },
     { folder: "dashboard", icon: "grid", label: "All sections", teacherOnly: true, extraClass: "admin-folder" },
     { folder: "roster", icon: "users", label: "Class roster", teacherOnly: true },

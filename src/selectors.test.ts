@@ -47,6 +47,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     selectedAssignmentId: null,
     selectedAnnouncementId: null,
     workFormOpen: false,
+    workSaving: false,
     submissionDraftFor: null,
     submissionDraftBody: "",
     submissionDraftFiles: [],

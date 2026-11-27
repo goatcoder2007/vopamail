@@ -7,6 +7,7 @@ import { parseRoute } from "./routing";
 import type { AppRoute } from "./routing";
 import {
   adminSection,
+  announcementsForList,
   assignmentsForList,
   currentClassmates,
   currentItems,
@@ -14,6 +15,7 @@ import {
   flaggedCount,
   mySubmission,
   resolveRecipients,
+  unseenAnnouncementCount,
   unreadCount
 } from "./selectors";
 import type { AppState } from "./selectors";
@@ -94,6 +96,7 @@ const initialState: AppState = {
   selectedAssignmentId: null,
   selectedAnnouncementId: null,
   workFormOpen: false,
+  workSaving: false,
   submissionDraftFor: null,
   submissionDraftBody: "",
   submissionDraftFiles: [],
@@ -292,7 +295,10 @@ export function useVopaApp() {
           backend.getAssignments(code).catch(() => [] as Assignment[]),
           backend.getSubmissions(code).catch(() => [] as Submission[]),
           backend.getSubmissionFiles(code).catch(() => [] as SubmissionFile[]),
-          backend.getAnnouncements(code).catch(() => [] as Announcement[]),
+          backend.getAnnouncements(code).catch((error) => {
+            console.error("Could not load announcements", error);
+            return [] as Announcement[];
+          }),
           backend.getItemViews(code).catch(() => [] as ItemView[])
         ]);
       patch({
@@ -983,17 +989,19 @@ export function useVopaApp() {
   const submitAnnouncementForm = useCallback(
     async (form: HTMLFormElement) => {
       const current = stateRef.current;
-      if (!current.profile || !backendRef.current) return;
+      if (!current.profile || !backendRef.current || current.workSaving) return;
       const data = new FormData(form);
+      patch({ workSaving: true });
       try {
         await backendRef.current.createAnnouncement(current.profile.classCode, current.profile.uid, {
           title: String(data.get("title") || "").trim(),
           body: String(data.get("body") || "").trim()
         });
-        patch({ workFormOpen: false });
+        patch({ workFormOpen: false, workSaving: false });
         await loadAll();
         showToast("Announcement posted", "success");
       } catch (error) {
+        patch({ workSaving: false });
         showToast("Could not post announcement: " + friendlyError(error), "error");
       }
     },
@@ -1365,13 +1373,16 @@ export function useVopaApp() {
   }, [demoMode]);
 
   const derived = {
+    items: currentItems(state),
     currentItems: currentItems(state),
+    empty: emptyCopy(state),
     unread: unreadCount(state),
     flagged: flaggedCount(state),
     classmates: currentClassmates(state),
     assignments: assignmentsForList(state),
-    adminSection: adminSection(state.adminOverview?.sections, state.selectedAdminSection),
-    empty: emptyCopy(state)
+    announcements: announcementsForList(state),
+    unseenAnnouncements: unseenAnnouncementCount(state),
+    adminSection: adminSection(state.adminOverview?.sections, state.selectedAdminSection)
   };
 
   return {

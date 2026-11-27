@@ -226,7 +226,7 @@ export function AnnouncementDetail({ api }: { api: AppApi }) {
               <label>Title<input name="title" type="text" maxLength={100} placeholder="e.g. Friday lab moved" required /></label>
             </div>
             <label className="work-field">Message<textarea name="body" rows={7} placeholder="What does the class need to know?" /></label>
-            <button className="btn primary" type="submit">Post announcement</button>
+            <button className="btn primary" type="submit" disabled={state.workSaving}>{state.workSaving ? "Posting…" : "Post announcement"}</button>
           </form>
         </div>
       </>

@@ -28,6 +28,7 @@ export interface AppState {
   selectedAssignmentId: string | null;
   selectedAnnouncementId: string | null;
   workFormOpen: boolean;
+  workSaving: boolean;
   submissionDraftFor: string | null;
   submissionDraftBody: string;
   submissionDraftFiles: import("./types").FileRef[];
@@ -174,6 +175,16 @@ export function announcementsForList(state: AppState) {
   return state.announcements
     .filter((item) => !state.query || (item.title + " " + item.body).toLowerCase().includes(state.query.toLowerCase()))
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function unseenAnnouncementCount(state: AppState) {
+  if (!state.profile) return 0;
+  const uid = state.profile.uid;
+  return state.announcements.filter(
+    (item) =>
+      item.authorId !== uid &&
+      !state.itemViews.some((view) => view.itemType === "announcement" && view.itemId === item.id && view.viewerId === uid)
+  ).length;
 }
 
 export function mySubmission(state: AppState, assignmentId: string) {
