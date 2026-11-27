@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import type { AppApi } from "../../app-api";
 import { FOLDER_LABELS } from "../../constants";
 import type { Folder } from "../../types";
@@ -7,13 +6,11 @@ import { Icon } from "../shared/ui";
 
 export function Sidebar({ api }: { api: AppApi }) {
   const { state, derived } = api;
-  const sectionInput = useRef<HTMLInputElement>(null);
   if (!state.profile) return null;
   const isTeacher = state.profile.role === "teacher";
   const teachers = state.members
     .filter((member) => member.uid !== state.profile!.uid && member.role === "teacher")
     .sort((a, b) => a.nameLower.localeCompare(b.nameLower));
-  const sections = Array.from(new Set([state.profile.classCode, ...state.knownSections, ...(state.adminOverview?.sections.map((section) => section.code) || [])])).filter(Boolean);
   const unread = derived.unread;
   const flagged = derived.flagged;
 
@@ -23,8 +20,6 @@ export function Sidebar({ api }: { api: AppApi }) {
     const action = target.dataset.action;
     if (action === "folder") api.actions.setFolder(target.dataset.folder as Folder);
     else if (action === "contact") api.actions.openCompose({ to: target.dataset.name || "" });
-    else if (action === "section") void api.actions.switchSection(target.dataset.section);
-    else if (action === "switch-section") void api.actions.switchSection(sectionInput.current?.value);
     else if (action === "sign-out") void api.actions.signOut();
   };
 
@@ -70,31 +65,6 @@ export function Sidebar({ api }: { api: AppApi }) {
           <Icon name="pencil" />
           <span>Compose</span>
         </button>
-
-        <div id="sectionSwitcher" className="section-switcher" hidden={!isTeacher}>
-          <div className="section-switcher-head">
-            <label htmlFor="sectionInput">Class section</label>
-            <span className="section-dot" aria-hidden="true" />
-          </div>
-          <div className="section-switcher-row">
-            <div className="section-input-wrap">
-              <Icon name="layers" />
-              <input id="sectionInput" ref={sectionInput} key={state.profile.classCode} type="text" maxLength={24} autoComplete="off" spellCheck={false} list="sectionOptions" defaultValue={state.profile.classCode} placeholder="Section code" />
-              <datalist id="sectionOptions">
-                {sections.map((code) => <option value={code} key={code} />)}
-              </datalist>
-            </div>
-            <button id="switchSectionBtn" className="section-switch-btn" type="button" aria-label="Switch section" title="Switch section" data-action="switch-section">
-              <Icon name="arrow-right" />
-              <span>Switch</span>
-            </button>
-          </div>
-          <div id="sectionChips" className="section-chips" aria-label="Saved sections">
-            {sections.slice(0, 8).map((code) => (
-              <button type="button" key={code} className={`section-chip${code === state.profile?.classCode ? " active" : ""}`} data-action="section" data-section={code} title={`Switch to ${code}`}>{code}</button>
-            ))}
-          </div>
-        </div>
 
         <nav id="folders" className="folders" aria-label="Mail folders" onClick={handleClick}>
           {folderRows.map((row) => (

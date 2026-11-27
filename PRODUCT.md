@@ -21,8 +21,8 @@ Each section is a self-contained classroom with its own membership, mail, files,
 
 ## Operating Context
 
-- Users sign in to a class section and stay in that section until they switch.
-- Teachers can switch between sections and use an all-sections admin view.
+- Users sign in to a class section and work in that section.
+- Teachers use an all-sections admin view to review granted sections.
 - Teachers can toggle student-to-student messaging per section; students can still email the teacher.
 - Teachers use `/all` or the “Email all students” action to message the whole section.
 - Attachments and assignment submissions use shared class file storage.

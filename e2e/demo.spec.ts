@@ -56,6 +56,7 @@ test("student can sign in, open a message, and send a new one", async ({ page })
 
 test("teacher dashboard, roster, and assignments load", async ({ page }) => {
   await signIn(page, { name: "Teacher", password: "teacher123", teacher: true });
+  await expect(page.locator("#sectionSwitcher")).toHaveCount(0);
 
   await page.getByRole("button", { name: "All sections" }).click();
   await expect(page.getByText("Section overview")).toBeVisible();
@@ -67,17 +68,6 @@ test("teacher dashboard, roster, and assignments load", async ({ page }) => {
 
   await page.getByRole("button", { name: "Assignments" }).click();
   await expect(page.getByRole("heading", { name: "Create an assignment" })).toBeVisible();
-});
-
-test("teacher can switch to another section", async ({ page }) => {
-  await signIn(page, { name: "Teacher", password: "teacher123", teacher: true });
-
-  await page.locator("#sectionInput").fill("E2E102");
-  await page.getByRole("button", { name: "Switch section" }).click();
-  await expect(page.locator("#sectionInput")).toHaveValue("E2E102");
-
-  await page.getByRole("button", { name: "Class roster" }).click();
-  await expect(page.getByRole("heading", { name: "Class roster", level: 1 })).toBeVisible();
 });
 
 test("supports deep links and browser history", async ({ page }) => {
