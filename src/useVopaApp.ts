@@ -415,9 +415,22 @@ export function useVopaApp() {
       let code: string;
       try {
         code = validateClassCode(requestedCode || "");
-        await backendRef.current?.ensureSection?.(code);
       } catch (error) {
         showToast(friendlyError(error), "error");
+        return;
+      }
+      let grantError: unknown = null;
+      try {
+        await backendRef.current?.ensureSection?.(code);
+      } catch (error) {
+        grantError = error;
+      }
+      const alreadyAvailable =
+        code === current.profile.classCode ||
+        current.knownSections.includes(code) ||
+        Boolean(current.adminOverview?.sections.some((section) => section.code === code));
+      if (grantError && !alreadyAvailable) {
+        showToast(friendlyError(grantError), "error");
         return;
       }
       if (code === current.profile.classCode) {
