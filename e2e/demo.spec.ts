@@ -23,6 +23,19 @@ async function signIn(page: Page, options: SignInOptions) {
   await expect(page.locator("#appShell")).toBeVisible();
 }
 
+test("password visibility toggle switches input type and icon", async ({ page }) => {
+  await page.goto("/?demo=1");
+  const password = page.getByLabel("Password", { exact: true });
+
+  await expect(password).toHaveAttribute("type", "password");
+  await expect(page.locator(".password-toggle .eye-open")).toBeVisible();
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await expect(page.locator(".password-toggle .eye-closed")).toBeVisible();
+  await page.getByRole("button", { name: "Hide password" }).click();
+  await expect(password).toHaveAttribute("type", "password");
+});
+
 test("student can sign in, open a message, and send a new one", async ({ page }) => {
   await signIn(page, { name: "Ava Chen", password: "student123" });
 

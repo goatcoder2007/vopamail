@@ -66,11 +66,11 @@ export function AuthScreen({ api }: { api: AppApi }) {
           </div>
           <div className="field password-field">
             <label htmlFor="password">Password</label>
-            <div className="password-input-wrap">
+            <div className={`password-input-wrap${showPassword ? " password-visible" : ""}`}>
               <input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Your Vopa Mail password" required minLength={6} maxLength={72} />
               <button id="togglePasswordBtn" className="password-toggle" type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} title={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((value) => !value)}>
-                <Icon name="eye" className={`icon ${showPassword ? "" : "eye-open"}`} />
-                <Icon name="eye-off" className={`icon ${showPassword ? "eye-closed" : ""}`} />
+                <Icon name="eye" className="icon eye-open" />
+                <Icon name="eye-off" className="icon eye-closed" />
               </button>
             </div>
           </div>
